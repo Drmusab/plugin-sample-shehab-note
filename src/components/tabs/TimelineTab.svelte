@@ -1,7 +1,14 @@
 <script lang="ts">
   import type { Task } from "@/core/models/Task";
   import type { RecurrenceEngine } from "@/core/engine/RecurrenceEngine";
-  import { formatDate, formatTime, getDateRange } from "@/utils/date";
+  import {
+    addDays,
+    endOfDay,
+    formatDate,
+    formatTime,
+    getDateRange,
+    startOfDay,
+  } from "@/utils/date";
 
   interface Props {
     tasks: Task[];
@@ -17,11 +24,11 @@
   }
 
   const timelineData = $derived.by(() => {
-    const today = new Date();
-    const endDate = new Date(today);
-    endDate.setDate(endDate.getDate() + days);
+    const startDate = startOfDay(new Date());
+    const endDate = endOfDay(addDays(startDate, days - 1));
+    const msPerDay = 24 * 60 * 60 * 1000;
 
-    const dateRange = getDateRange(today, days);
+    const dateRange = getDateRange(startDate, days);
     const timeline: TimelineDay[] = dateRange.map((date) => ({
       date,
       tasks: [],
@@ -31,20 +38,27 @@
     for (const task of tasks.filter((t) => t.enabled)) {
       const firstOccurrence = new Date(task.dueAt);
       const occurrences = recurrenceEngine.getOccurrencesInRange(
-        today,
+        startDate,
         endDate,
         task.frequency,
         firstOccurrence
       );
 
       for (const occurrence of occurrences) {
+        const occurrenceDay = startOfDay(occurrence);
         const dayIndex = Math.floor(
-          (occurrence.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)
+          (occurrenceDay.getTime() - startDate.getTime()) / msPerDay
         );
         if (dayIndex >= 0 && dayIndex < days) {
           timeline[dayIndex].tasks.push({ task, occurrence });
         }
       }
+    }
+
+    for (const day of timeline) {
+      day.tasks.sort(
+        (a, b) => a.occurrence.getTime() - b.occurrence.getTime()
+      );
     }
 
     return timeline;
