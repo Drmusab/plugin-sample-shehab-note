@@ -10,7 +10,16 @@ export const SETTINGS_KEY = "n8n-event-settings";
 
 export const EVENT_QUEUE_KEY = "n8n-event-queue";
 
+export const NOTIFICATION_STATE_KEY = "notification-state";
+
 export const DOCK_TYPE = "recurring-tasks-dock";
+
+export const TOPBAR_ICON_ID = "recurring-tasks-topbar";
+
+/**
+ * Schema version for data migrations
+ */
+export const CURRENT_SCHEMA_VERSION = 3;
 
 /**
  * Default n8n event configuration
@@ -42,3 +51,55 @@ export const MISSED_GRACE_PERIOD_MS = 60 * 60 * 1000;
  * Timeline days to show
  */
 export const TIMELINE_DAYS = 30;
+
+/**
+ * Snooze settings
+ */
+export const DEFAULT_MAX_SNOOZES = 3;
+
+export const DEFAULT_SNOOZE_MINUTES = 15;
+
+export const MAX_RECENT_COMPLETIONS = 10;
+
+export const SNOOZE_OPTIONS = [
+  { label: "15 minutes", minutes: 15 },
+  { label: "30 minutes", minutes: 30 },
+  { label: "1 hour", minutes: 60 },
+  { label: "2 hours", minutes: 120 },
+  { label: "4 hours", minutes: 240 },
+];
+
+/**
+ * Priority colors
+ */
+export const PRIORITY_COLORS = {
+  low: "#64748b",
+  normal: "#3b82f6",
+  high: "#f59e0b",
+  urgent: "#ef4444",
+};
+
+/**
+ * Frequency labels
+ */
+export const FREQUENCY_LABELS: Record<string, string> = {
+  daily: "Daily",
+  weekly: "Weekly",
+  monthly: "Monthly",
+  custom: "Custom",
+};
+
+/**
+ * Weekday names
+ */
+export const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+export const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

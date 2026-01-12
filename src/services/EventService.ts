@@ -121,7 +121,7 @@ export class EventService {
   /**
    * Emit a task event to n8n
    */
-  async emitTaskEvent(event: TaskEventType, task: Task): Promise<void> {
+  async emitTaskEvent(event: TaskEventType, task: Task, escalationLevel: number = 0): Promise<void> {
     if (!this.config.n8n.enabled || !this.config.n8n.webhookUrl) {
       return;
     }
@@ -131,7 +131,7 @@ export class EventService {
       return;
     }
 
-    const payload = this.buildPayload(event, task, dedupeKey, 1);
+    const payload = this.buildPayload(event, task, dedupeKey, 1, escalationLevel);
     const success = await this.sendPayload(payload);
 
     if (success) {
@@ -224,14 +224,29 @@ export class EventService {
     event: TaskEventType,
     task: Task,
     dedupeKey: string,
-    attempt: number
+    attempt: number,
+    escalationLevel: number = 0
   ): TaskEventPayload {
+    const now = new Date();
+    const dueDate = new Date(task.dueAt);
+    const delayMs = now.getTime() - dueDate.getTime();
+
     return {
       event,
       source: PLUGIN_EVENT_SOURCE,
       version: PLUGIN_EVENT_VERSION,
-      occurredAt: new Date().toISOString(),
+      occurredAt: now.toISOString(),
       task: createTaskSnapshot(task),
+      context: {
+        timezone: task.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+        delayMs: delayMs > 0 ? delayMs : undefined,
+        previousDueAt: task.lastCompletedAt,
+        nextDueAt: undefined, // Can be set after reschedule
+      },
+      routing: {
+        escalationLevel,
+        channels: task.notificationChannels || [],
+      },
       delivery: {
         dedupeKey,
         attempt,
@@ -278,20 +293,75 @@ export class EventService {
     return Math.min(delay, RETRY_MAX_DELAY_MS);
   }
 
+  /**
+   * Generate HMAC signature for payload
+   */
+  private async generateSignature(payload: string, secret: string): Promise<string> {
+    try {
+      // Use Web Crypto API if available
+      if (typeof crypto !== "undefined" && crypto.subtle) {
+        const encoder = new TextEncoder();
+        const keyData = encoder.encode(secret);
+        const messageData = encoder.encode(payload);
+        
+        const key = await crypto.subtle.importKey(
+          "raw",
+          keyData,
+          { name: "HMAC", hash: "SHA-256" },
+          false,
+          ["sign"]
+        );
+        
+        const signature = await crypto.subtle.sign("HMAC", key, messageData);
+        const hashArray = Array.from(new Uint8Array(signature));
+        return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+      }
+      
+      // If crypto API is not available, fail gracefully
+      console.warn("Web Crypto API not available - signature generation disabled");
+      return "";
+    } catch (err) {
+      console.error("Failed to generate signature:", err);
+      return "";
+    }
+  }
+
   private async sendPayload(
     payload: TaskEventPayload,
     expectOkResponse = false
   ): Promise<boolean> {
     try {
+      const payloadStr = JSON.stringify(payload);
+      const timestamp = new Date().toISOString();
+      
+      // Generate HMAC signature if secret is configured
+      let signature = "";
+      if (this.config.n8n.sharedSecret) {
+        signature = await this.generateSignature(
+          payloadStr + timestamp,
+          this.config.n8n.sharedSecret
+        );
+      }
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-Shehab-Event": payload.event,
+        "X-Shehab-Timestamp": timestamp,
+      };
+
+      if (signature) {
+        headers["X-Shehab-Signature"] = signature;
+      }
+
+      // Legacy header for backward compatibility
+      if (this.config.n8n.sharedSecret) {
+        headers["X-Shehab-Note-Secret"] = this.config.n8n.sharedSecret;
+      }
+
       const response = await this.fetcher(this.config.n8n.webhookUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(this.config.n8n.sharedSecret
-            ? { "X-Shehab-Note-Secret": this.config.n8n.sharedSecret }
-            : {}),
-        },
-        body: JSON.stringify(payload),
+        headers,
+        body: payloadStr,
       });
 
       if (!response.ok) {

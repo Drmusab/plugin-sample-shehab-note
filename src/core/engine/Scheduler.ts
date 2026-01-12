@@ -1,7 +1,11 @@
 import type { Task } from "@/core/models/Task";
 import type { TaskStorage } from "@/core/storage/TaskStorage";
 import { RecurrenceEngine } from "./RecurrenceEngine";
+import { NotificationState } from "./NotificationState";
+import { TimezoneHandler } from "./TimezoneHandler";
+import { recordCompletion, recordMiss } from "@/core/models/Task";
 import { MISSED_GRACE_PERIOD_MS, SCHEDULER_INTERVAL_MS } from "@/utils/constants";
+import * as logger from "@/utils/logger";
 
 /**
  * Scheduler manages task timing and triggers notifications
@@ -9,16 +13,22 @@ import { MISSED_GRACE_PERIOD_MS, SCHEDULER_INTERVAL_MS } from "@/utils/constants
 export class Scheduler {
   private storage: TaskStorage;
   private recurrenceEngine: RecurrenceEngine;
+  private notificationState: NotificationState | null = null;
+  private timezoneHandler: TimezoneHandler;
   private intervalId: number | null = null;
   private onTaskDue: ((task: Task) => void) | null = null;
   private onTaskMissed: ((task: Task) => void) | null = null;
-  private notifiedTasks: Set<string> = new Set();
-  private missedTasks: Set<string> = new Set();
   private intervalMs: number;
 
-  constructor(storage: TaskStorage, intervalMs: number = SCHEDULER_INTERVAL_MS) {
+  constructor(
+    storage: TaskStorage,
+    notificationState?: NotificationState,
+    intervalMs: number = SCHEDULER_INTERVAL_MS
+  ) {
     this.storage = storage;
     this.recurrenceEngine = new RecurrenceEngine();
+    this.notificationState = notificationState || null;
+    this.timezoneHandler = new TimezoneHandler();
     this.intervalMs = intervalMs;
   }
 
@@ -38,7 +48,7 @@ export class Scheduler {
       this.checkDueTasks();
     }, this.intervalMs) as unknown as number;
     
-    console.log("Scheduler started");
+    logger.info("Scheduler started");
   }
 
   /**
@@ -48,7 +58,7 @@ export class Scheduler {
     if (this.intervalId !== null) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      console.log("Scheduler stopped");
+      logger.info("Scheduler stopped");
     }
   }
 
@@ -60,6 +70,13 @@ export class Scheduler {
   }
 
   /**
+   * Check if a task is active
+   */
+  isActive(task: Task): boolean {
+    return task.enabled === true;
+  }
+
+  /**
    * Check for tasks that are due and trigger notifications
    */
   private checkDueTasks(): void {
@@ -67,28 +84,38 @@ export class Scheduler {
     const tasks = this.storage.getEnabledTasks();
 
     for (const task of tasks) {
+      if (!this.isActive(task)) {
+        continue;
+      }
+
       const dueDate = new Date(task.dueAt);
-      
-      // Check if task is due
       const isDue = dueDate <= now;
-      const taskKey = `${task.id}-${task.dueAt}`;
-      
-      if (isDue && !this.notifiedTasks.has(taskKey)) {
-        // Trigger notification
-        if (this.onTaskDue) {
+
+      // Generate task key for deduplication
+      const taskKey = this.notificationState
+        ? this.notificationState.generateTaskKey(task.id, task.dueAt)
+        : `${task.id}-${task.dueAt}`;
+
+      // Check if task is due
+      if (isDue && this.onTaskDue) {
+        const alreadyNotified = this.notificationState
+          ? this.notificationState.hasNotified(taskKey)
+          : false;
+
+        if (!alreadyNotified) {
           this.onTaskDue(task);
-        }
-        
-        // Mark as notified for this occurrence
-        this.notifiedTasks.add(taskKey);
-        
-        // Clean up old notification records (keep last 1000)
-        if (this.notifiedTasks.size > 1000) {
-          const toDelete = Array.from(this.notifiedTasks).slice(0, 100);
-          toDelete.forEach(key => this.notifiedTasks.delete(key));
+          
+          if (this.notificationState) {
+            this.notificationState.markNotified(taskKey);
+            // Save state asynchronously
+            void this.notificationState.save();
+          }
+
+          logger.info(`Task due: ${task.name}`, { taskId: task.id, dueAt: task.dueAt });
         }
       }
 
+      // Check if task is missed
       const lastCompletedAt = task.lastCompletedAt
         ? new Date(task.lastCompletedAt)
         : null;
@@ -97,15 +124,23 @@ export class Scheduler {
         isDue &&
         this.onTaskMissed &&
         now.getTime() - dueDate.getTime() >= MISSED_GRACE_PERIOD_MS &&
-        !this.missedTasks.has(taskKey) &&
         (!lastCompletedAt || lastCompletedAt < dueDate)
       ) {
-        this.onTaskMissed(task);
-        this.missedTasks.add(taskKey);
+        const alreadyMissed = this.notificationState
+          ? this.notificationState.hasMissed(taskKey)
+          : false;
 
-        if (this.missedTasks.size > 1000) {
-          const toDelete = Array.from(this.missedTasks).slice(0, 100);
-          toDelete.forEach((key) => this.missedTasks.delete(key));
+        if (!alreadyMissed) {
+          this.onTaskMissed(task);
+          
+          if (this.notificationState) {
+            this.notificationState.markMissed(taskKey);
+            this.notificationState.incrementEscalation(task.id);
+            // Save state asynchronously
+            void this.notificationState.save();
+          }
+
+          logger.warn(`Task missed: ${task.name}`, { taskId: task.id, dueAt: task.dueAt });
         }
       }
     }
@@ -120,8 +155,8 @@ export class Scheduler {
       throw new Error(`Task not found: ${taskId}`);
     }
 
-    // Save completion time
-    task.lastCompletedAt = new Date().toISOString();
+    // Record completion (updates analytics)
+    recordCompletion(task);
 
     // Calculate next occurrence
     const currentDue = new Date(task.dueAt);
@@ -133,35 +168,73 @@ export class Scheduler {
     // Update task
     task.dueAt = nextDue.toISOString();
     await this.storage.saveTask(task);
-    console.log(`Task "${task.name}" rescheduled to ${nextDue.toISOString()}`);
+
+    // Reset escalation
+    if (this.notificationState) {
+      this.notificationState.resetEscalation(task.id);
+      await this.notificationState.save();
+    }
+
+    logger.info(`Task "${task.name}" completed and rescheduled to ${nextDue.toISOString()}`);
   }
 
   /**
-   * Delay a task to tomorrow
+   * Delay a task by specified minutes
    */
-  async delayTaskToTomorrow(taskId: string): Promise<void> {
+  async delayTask(taskId: string, delayMinutes: number): Promise<void> {
     const task = this.storage.getTask(taskId);
     if (!task) {
       throw new Error(`Task not found: ${taskId}`);
     }
 
     const currentDue = new Date(task.dueAt);
-    const tomorrow = new Date(currentDue);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const delayed = new Date(currentDue.getTime() + delayMinutes * 60 * 1000);
+
+    task.dueAt = delayed.toISOString();
+    task.snoozeCount = (task.snoozeCount || 0) + 1;
+    await this.storage.saveTask(task);
+
+    logger.info(`Task "${task.name}" delayed by ${delayMinutes} minutes to ${delayed.toISOString()}`);
+  }
+
+  /**
+   * Delay a task to tomorrow
+   */
+  async delayToTomorrow(taskId: string): Promise<void> {
+    const task = this.storage.getTask(taskId);
+    if (!task) {
+      throw new Error(`Task not found: ${taskId}`);
+    }
+
+    const currentDue = new Date(task.dueAt);
+    const tomorrow = this.timezoneHandler.tomorrow();
+    
+    // Preserve the time from the current due date
+    tomorrow.setHours(
+      currentDue.getHours(),
+      currentDue.getMinutes(),
+      0,
+      0
+    );
 
     task.dueAt = tomorrow.toISOString();
+    task.snoozeCount = (task.snoozeCount || 0) + 1;
     await this.storage.saveTask(task);
-    console.log(`Task "${task.name}" delayed to ${tomorrow.toISOString()}`);
+
+    logger.info(`Task "${task.name}" delayed to tomorrow: ${tomorrow.toISOString()}`);
   }
 
   /**
    * Skip a task occurrence and reschedule to next recurrence
    */
-  async skipTaskOccurrence(taskId: string): Promise<void> {
+  async skipOccurrence(taskId: string): Promise<void> {
     const task = this.storage.getTask(taskId);
     if (!task) {
       throw new Error(`Task not found: ${taskId}`);
     }
+
+    // Record as a miss
+    recordMiss(task);
 
     const currentDue = new Date(task.dueAt);
     const nextDue = this.recurrenceEngine.calculateNext(
@@ -171,7 +244,22 @@ export class Scheduler {
 
     task.dueAt = nextDue.toISOString();
     await this.storage.saveTask(task);
-    console.log(`Task "${task.name}" skipped to ${nextDue.toISOString()}`);
+
+    logger.info(`Task "${task.name}" skipped to ${nextDue.toISOString()}`);
+  }
+
+  /**
+   * Legacy method - kept for backward compatibility
+   */
+  async delayTaskToTomorrow(taskId: string): Promise<void> {
+    return this.delayToTomorrow(taskId);
+  }
+
+  /**
+   * Legacy method - kept for backward compatibility
+   */
+  async skipTaskOccurrence(taskId: string): Promise<void> {
+    return this.skipOccurrence(taskId);
   }
 
   /**
@@ -179,5 +267,12 @@ export class Scheduler {
    */
   getRecurrenceEngine(): RecurrenceEngine {
     return this.recurrenceEngine;
+  }
+
+  /**
+   * Get timezone handler for external use
+   */
+  getTimezoneHandler(): TimezoneHandler {
+    return this.timezoneHandler;
   }
 }

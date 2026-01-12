@@ -30,14 +30,32 @@ export interface EventDelivery {
   attempt: number;
 }
 
+export interface EventContext {
+  timezone: string;
+  delayMs?: number;
+  previousDueAt?: string;
+  nextDueAt?: string;
+}
+
+export interface EventRouting {
+  escalationLevel: number;
+  channels: string[];
+}
+
 export interface TaskSnapshot {
   id: string;
   name: string;
   dueAt: string;
   frequency: Frequency;
   linkedBlockId?: string;
-  priority?: "low" | "normal" | "high";
+  linkedBlockContent?: string;
+  priority?: "low" | "normal" | "high" | "urgent";
   tags?: string[];
+  notificationChannels?: string[];
+  completionCount?: number;
+  missCount?: number;
+  currentStreak?: number;
+  bestStreak?: number;
 }
 
 export interface TaskEventPayload {
@@ -46,6 +64,8 @@ export interface TaskEventPayload {
   version: string;
   occurredAt: string;
   task?: TaskSnapshot;
+  context?: EventContext;
+  routing?: EventRouting;
   delivery: EventDelivery;
 }
 
@@ -63,7 +83,13 @@ export function createTaskSnapshot(task: Task): TaskSnapshot {
     dueAt: task.dueAt,
     frequency: task.frequency,
     linkedBlockId: task.linkedBlockId,
+    linkedBlockContent: task.linkedBlockContent,
     priority: task.priority,
     tags: task.tags,
+    notificationChannels: task.notificationChannels,
+    completionCount: task.completionCount,
+    missCount: task.missCount,
+    currentStreak: task.currentStreak,
+    bestStreak: task.bestStreak,
   };
 }

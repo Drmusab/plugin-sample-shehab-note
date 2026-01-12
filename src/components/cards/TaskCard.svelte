@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Task } from "@/core/models/Task";
   import { formatDateTime, isOverdue, isToday } from "@/utils/date";
+  import { PRIORITY_COLORS, SNOOZE_OPTIONS } from "@/utils/constants";
 
   interface Props {
     task: Task;
@@ -8,9 +9,10 @@
     onDelay: (task: Task) => void;
     onSkip: (task: Task) => void;
     onEdit?: (task: Task) => void;
+    timezoneHandler?: any; // TimezoneHandler instance
   }
 
-  let { task, onDone, onDelay, onSkip, onEdit }: Props = $props();
+  let { task, onDone, onDelay, onSkip, onEdit, timezoneHandler }: Props = $props();
 
   const dueDate = $derived(new Date(task.dueAt));
   const overdue = $derived(isOverdue(dueDate));
@@ -18,6 +20,28 @@
   const statusClass = $derived(
     overdue ? "task-card--overdue" : today ? "task-card--today" : ""
   );
+
+  const priorityColor = $derived(
+    task.priority ? PRIORITY_COLORS[task.priority] : PRIORITY_COLORS.normal
+  );
+
+  const relativeTime = $derived(() => {
+    if (timezoneHandler) {
+      return timezoneHandler.getRelativeTime(dueDate);
+    }
+    return "";
+  });
+
+  const hasStreak = $derived((task.currentStreak || 0) > 0);
+  const streakEmoji = $derived(() => {
+    const streak = task.currentStreak || 0;
+    if (streak >= 10) return "🔥🔥";
+    if (streak >= 5) return "🔥";
+    if (streak >= 3) return "⚡";
+    return "✨";
+  });
+
+  let showSnoozeMenu = $state(false);
 
   function handleDone() {
     onDone(task);
@@ -36,11 +60,36 @@
   function handleSkip() {
     onSkip(task);
   }
+
+  function toggleSnoozeMenu() {
+    showSnoozeMenu = !showSnoozeMenu;
+  }
+
+  function handleSnooze(minutes: number) {
+    // Dispatch custom event for snoozing
+    const event = new CustomEvent("task-snooze", {
+      detail: { taskId: task.id, minutes },
+    });
+    window.dispatchEvent(event);
+    showSnoozeMenu = false;
+  }
 </script>
 
 <div class="task-card {statusClass}">
   <div class="task-card__header">
-    <h3 class="task-card__name">{task.name}</h3>
+    <div class="task-card__title-row">
+      <div
+        class="task-card__priority-indicator"
+        style="background-color: {priorityColor}"
+        title="Priority: {task.priority || 'normal'}"
+      ></div>
+      <h3 class="task-card__name">{task.name}</h3>
+      {#if hasStreak}
+        <span class="task-card__streak" title="{task.currentStreak} day streak">
+          {streakEmoji()} {task.currentStreak}
+        </span>
+      {/if}
+    </div>
     {#if onEdit}
       <button class="task-card__edit-btn" onclick={handleEdit} title="Edit">
         ✏️
@@ -52,6 +101,9 @@
     <div class="task-card__due">
       <span class="task-card__label">Due:</span>
       <span class="task-card__value">{formatDateTime(dueDate)}</span>
+      {#if timezoneHandler}
+        <span class="task-card__relative">{relativeTime()}</span>
+      {/if}
     </div>
 
     {#if task.lastCompletedAt}
@@ -62,11 +114,39 @@
         </span>
       </div>
     {/if}
+
+    {#if task.linkedBlockId}
+      <div class="task-card__linked-block">
+        <button class="task-card__block-link" title="Go to linked block">
+          📝 Go to Block
+        </button>
+      </div>
+    {/if}
   </div>
 
   <div class="task-card__actions">
+    <div class="task-card__snooze-container">
+      <button
+        class="task-card__action task-card__action--snooze"
+        onclick={toggleSnoozeMenu}
+      >
+        🕒 Snooze
+      </button>
+      {#if showSnoozeMenu}
+        <div class="task-card__snooze-menu">
+          {#each SNOOZE_OPTIONS as option}
+            <button
+              class="task-card__snooze-option"
+              onclick={() => handleSnooze(option.minutes)}
+            >
+              {option.label}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
     <button class="task-card__action task-card__action--delay" onclick={handleDelay}>
-      🕒 Delay to Tomorrow
+      🕒 Tomorrow
     </button>
     <button class="task-card__action task-card__action--skip" onclick={handleSkip}>
       ⏭️ Skip
@@ -85,6 +165,7 @@
     padding: 16px;
     margin-bottom: 12px;
     transition: all 0.2s ease;
+    position: relative;
   }
 
   .task-card:hover {
@@ -106,11 +187,35 @@
     margin-bottom: 12px;
   }
 
+  .task-card__title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+  }
+
+  .task-card__priority-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
   .task-card__name {
     margin: 0;
     font-size: 16px;
     font-weight: 600;
     color: var(--b3-theme-on-surface);
+    flex: 1;
+  }
+
+  .task-card__streak {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--b3-theme-primary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .task-card__edit-btn {
@@ -146,13 +251,44 @@
     font-weight: 500;
   }
 
+  .task-card__relative {
+    color: var(--b3-theme-on-surface-light);
+    font-size: 12px;
+    margin-left: 8px;
+  }
+
+  .task-card__linked-block {
+    margin-top: 8px;
+  }
+
+  .task-card__block-link {
+    background: var(--b3-theme-surface-lighter);
+    border: 1px solid var(--b3-border-color);
+    color: var(--b3-theme-on-surface);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .task-card__block-link:hover {
+    background: var(--b3-theme-surface-light);
+  }
+
   .task-card__actions {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .task-card__snooze-container {
+    position: relative;
   }
 
   .task-card__action {
     flex: 1;
+    min-width: 80px;
     padding: 8px 12px;
     border: none;
     border-radius: 6px;
@@ -160,6 +296,15 @@
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+  }
+
+  .task-card__action--snooze {
+    background: var(--b3-theme-surface-lighter);
+    color: var(--b3-theme-on-surface);
+  }
+
+  .task-card__action--snooze:hover {
+    background: var(--b3-theme-surface-light);
   }
 
   .task-card__action--delay {
@@ -187,5 +332,43 @@
 
   .task-card__action--done:hover {
     background: var(--b3-theme-primary-light);
+  }
+
+  .task-card__snooze-menu {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 4px;
+    background: var(--b3-theme-surface);
+    border: 1px solid var(--b3-border-color);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    min-width: 150px;
+  }
+
+  .task-card__snooze-option {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--b3-theme-on-surface);
+    transition: background 0.2s;
+  }
+
+  .task-card__snooze-option:hover {
+    background: var(--b3-theme-surface-lighter);
+  }
+
+  .task-card__snooze-option:first-child {
+    border-radius: 6px 6px 0 0;
+  }
+
+  .task-card__snooze-option:last-child {
+    border-radius: 0 0 6px 6px;
   }
 </style>

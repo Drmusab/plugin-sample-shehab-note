@@ -17,7 +17,8 @@ describe("Scheduler", () => {
       saveTask: vi.fn(),
     };
 
-    const scheduler = new Scheduler(storage as any, 1000);
+    // No notification state provided, so it uses fallback logic
+    const scheduler = new Scheduler(storage as any, undefined, 1000);
     let dueCount = 0;
 
     scheduler.start(() => {
