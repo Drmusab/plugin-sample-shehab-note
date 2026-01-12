@@ -1,9 +1,16 @@
 <script lang="ts">
   import type { Task } from "@/core/models/Task";
+  import { recordCompletion, recordMiss } from "@/core/models/Task";
   import type { TaskStorage } from "@/core/storage/TaskStorage";
   import type { Scheduler } from "@/core/engine/Scheduler";
   import type { EventService } from "@/services/EventService";
   import { toast } from "@/utils/notifications";
+  import {
+    getTodayAndOverdueTasks,
+    removeTask,
+    updateTaskById,
+    upsertTask,
+  } from "./dashboard/taskState";
   import TodayTab from "./tabs/TodayTab.svelte";
   import AllTasksTab from "./tabs/AllTasksTab.svelte";
   import TimelineTab from "./tabs/TimelineTab.svelte";
@@ -26,71 +33,107 @@
   let showTaskForm = $state(false);
   let showSettings = $state(false);
   let editingTask = $state<Task | undefined>(undefined);
+  /**
+   * Dashboard task state (single UI source of truth).
+   * Storage is only used for initial hydration or explicit reloads.
+   */
   let allTasks = $state<Task[]>([]);
-  let todayTasks = $state<Task[]>([]);
+  let todayTasks = $derived(getTodayAndOverdueTasks(allTasks));
 
-  // Refresh tasks from storage
-  function refreshTasks() {
-    allTasks = storage.getAllTasks();
-    todayTasks = storage.getTodayAndOverdueTasks();
+  const recurrenceEngine = scheduler.getRecurrenceEngine();
+
+  // Refresh tasks from storage (initial load / explicit reloads only)
+  function loadTasksFromStorage(reason: "initial" | "reload" | "external" = "initial") {
+    // Shallow copy keeps UI state decoupled from storage while avoiding deep clones.
+    allTasks = storage.getAllTasks().map((task) => ({ ...task }));
+    if (reason !== "initial") {
+      toast.info("Task list reloaded");
+    }
   }
 
   // Initialize
-  refreshTasks();
+  loadTasksFromStorage();
 
   async function handleTaskDone(task: Task) {
-    try {
-      await eventService.emitTaskEvent("task.completed", task);
-      await scheduler.markTaskDone(task.id);
-      refreshTasks();
-      toast.success(`Task "${task.name}" completed and rescheduled`);
-    } catch (err) {
-      toast.error("Failed to mark task as done: " + err);
-    }
+    const nextTasks = updateTaskById(allTasks, task.id, (current) => {
+      const nextTask = { ...current };
+      recordCompletion(nextTask);
+      const nextDue = recurrenceEngine.calculateNext(new Date(nextTask.dueAt), nextTask.frequency);
+      nextTask.dueAt = nextDue.toISOString();
+      return nextTask;
+    });
+
+    allTasks = nextTasks;
+    toast.success(`Task "${task.name}" completed and rescheduled`);
+
+    void eventService
+      .emitTaskEvent("task.completed", task)
+      .then(() => scheduler.markTaskDone(task.id))
+      .catch((err) => {
+        toast.error("Failed to mark task as done: " + err);
+        loadTasksFromStorage("external");
+      });
   }
 
   async function handleTaskDelay(task: Task) {
-    try {
-      await eventService.emitTaskEvent("task.snoozed", task);
-      await scheduler.delayTaskToTomorrow(task.id);
-      refreshTasks();
-      toast.info(`Task "${task.name}" delayed to tomorrow`);
-    } catch (err) {
-      toast.error("Failed to delay task: " + err);
-    }
+    const nextTasks = updateTaskById(allTasks, task.id, (current) => {
+      const nextTask = { ...current };
+      const currentDue = new Date(nextTask.dueAt);
+      const tomorrow = timezoneHandler.tomorrow();
+      tomorrow.setHours(currentDue.getHours(), currentDue.getMinutes(), 0, 0);
+      nextTask.dueAt = tomorrow.toISOString();
+      nextTask.snoozeCount = (nextTask.snoozeCount || 0) + 1;
+      nextTask.updatedAt = new Date().toISOString();
+      return nextTask;
+    });
+
+    allTasks = nextTasks;
+    toast.info(`Task "${task.name}" delayed to tomorrow`);
+
+    void eventService
+      .emitTaskEvent("task.snoozed", task)
+      .then(() => scheduler.delayTaskToTomorrow(task.id))
+      .catch((err) => {
+        toast.error("Failed to delay task: " + err);
+        loadTasksFromStorage("external");
+      });
   }
 
   async function handleSaveTask(task: Task) {
-    try {
-      await storage.saveTask(task);
-      refreshTasks();
-      showTaskForm = false;
-      editingTask = undefined;
-      toast.success(`Task "${task.name}" saved successfully`);
-    } catch (err) {
+    const nextTask = { ...task };
+    allTasks = upsertTask(allTasks, nextTask);
+    showTaskForm = false;
+    editingTask = undefined;
+    toast.success(`Task "${task.name}" saved successfully`);
+
+    void storage.saveTask(nextTask).catch((err) => {
       toast.error("Failed to save task: " + err);
-    }
+      loadTasksFromStorage("external");
+    });
   }
 
   async function handleDeleteTask(task: Task) {
-    try {
-      await storage.deleteTask(task.id);
-      refreshTasks();
-      toast.success(`Task "${task.name}" deleted`);
-    } catch (err) {
+    allTasks = removeTask(allTasks, task.id);
+    toast.success(`Task "${task.name}" deleted`);
+
+    void storage.deleteTask(task.id).catch((err) => {
       toast.error("Failed to delete task: " + err);
-    }
+      loadTasksFromStorage("external");
+    });
   }
 
   async function handleToggleEnabled(task: Task) {
-    try {
-      task.enabled = !task.enabled;
-      await storage.saveTask(task);
-      refreshTasks();
-      toast.info(`Task ${task.enabled ? "enabled" : "disabled"}`);
-    } catch (err) {
+    const nextEnabled = !task.enabled;
+    const nextTask = { ...task, enabled: nextEnabled };
+    const nextTasks = updateTaskById(allTasks, task.id, () => nextTask);
+
+    allTasks = nextTasks;
+    toast.info(`Task ${nextEnabled ? "enabled" : "disabled"}`);
+
+    void storage.saveTask(nextTask).catch((err) => {
       toast.error("Failed to update task: " + err);
-    }
+      loadTasksFromStorage("external");
+    });
   }
 
   function handleEditTask(task: Task) {
@@ -117,14 +160,24 @@
   }
 
   async function handleTaskSkip(task: Task) {
-    try {
-      await eventService.emitTaskEvent("task.skipped", task);
-      await scheduler.skipTaskOccurrence(task.id);
-      refreshTasks();
-      toast.info(`Task "${task.name}" skipped to next occurrence`);
-    } catch (err) {
-      toast.error("Failed to skip task: " + err);
-    }
+    const nextTasks = updateTaskById(allTasks, task.id, (current) => {
+      const nextTask = { ...current };
+      recordMiss(nextTask);
+      const nextDue = recurrenceEngine.calculateNext(new Date(nextTask.dueAt), nextTask.frequency);
+      nextTask.dueAt = nextDue.toISOString();
+      return nextTask;
+    });
+
+    allTasks = nextTasks;
+    toast.info(`Task "${task.name}" skipped to next occurrence`);
+
+    void eventService
+      .emitTaskEvent("task.skipped", task)
+      .then(() => scheduler.skipTaskOccurrence(task.id))
+      .catch((err) => {
+        toast.error("Failed to skip task: " + err);
+        loadTasksFromStorage("external");
+      });
   }
 </script>
 
