@@ -19,6 +19,8 @@ export class Scheduler {
   private fallbackMissed: Set<string> = new Set();
   private timezoneHandler: TimezoneHandler;
   private intervalId: number | null = null;
+  private isChecking = false;
+  private isRunning = false;
   private onTaskDue: ((task: Task) => void) | null = null;
   private onTaskMissed: ((task: Task) => void) | null = null;
   private intervalMs: number;
@@ -48,12 +50,24 @@ export class Scheduler {
     this.onTaskDue = onTaskDue;
     this.onTaskMissed = onTaskMissed ?? null;
     this.checkDueTasks(); // Check immediately
-    
-    // Use type assertion for cross-platform compatibility
-    this.intervalId = setInterval(() => {
-      this.checkDueTasks();
-    }, this.intervalMs) as unknown as number;
-    
+    this.isRunning = true;
+
+    const scheduleNextTick = (): void => {
+      if (!this.isRunning) {
+        return;
+      }
+      const now = Date.now();
+      const intervalMs = this.intervalMs > 0 ? this.intervalMs : SCHEDULER_INTERVAL_MS;
+      const delay = intervalMs - (now % intervalMs);
+      this.intervalId = setTimeout(() => {
+        this.checkDueTasks();
+        scheduleNextTick();
+      }, delay) as unknown as number;
+    };
+
+    // Use a self-correcting timeout to prevent long-uptime drift.
+    scheduleNextTick();
+
     logger.info("Scheduler started");
   }
 
@@ -62,10 +76,11 @@ export class Scheduler {
    */
   stop(): void {
     if (this.intervalId !== null) {
-      clearInterval(this.intervalId);
+      clearTimeout(this.intervalId);
       this.intervalId = null;
-      logger.info("Scheduler stopped");
     }
+    this.isRunning = false;
+    logger.info("Scheduler stopped");
   }
 
   /**
@@ -86,73 +101,81 @@ export class Scheduler {
    * Check for tasks that are due and trigger notifications
    */
   private checkDueTasks(): void {
+    if (this.isChecking) {
+      return;
+    }
+    this.isChecking = true;
     const now = new Date();
     const tasks = this.storage.getEnabledTasks();
 
-    for (const task of tasks) {
-      if (!this.isActive(task)) {
-        continue;
-      }
+    try {
+      for (const task of tasks) {
+        if (!this.isActive(task)) {
+          continue;
+        }
 
-      const dueDate = new Date(task.dueAt);
-      const isDue = dueDate <= now;
+        const dueDate = new Date(task.dueAt);
+        const isDue = dueDate <= now;
 
-      // Generate task key for deduplication
-      const taskKey = this.notificationState
-        ? this.notificationState.generateTaskKey(task.id, task.dueAt)
-        : `${task.id}-${task.dueAt}`;
+        // Generate task key for deduplication
+        const taskKey = this.notificationState
+          ? this.notificationState.generateTaskKey(task.id, task.dueAt)
+          : `${task.id}-${task.dueAt}`;
 
-      // Check if task is due
-      if (isDue && this.onTaskDue) {
-        const alreadyNotified = this.notificationState
-          ? this.notificationState.hasNotified(taskKey)
-          : this.fallbackNotified.has(taskKey);
+        // Check if task is due
+        if (isDue && this.onTaskDue) {
+          const alreadyNotified = this.notificationState
+            ? this.notificationState.hasNotified(taskKey)
+            : this.fallbackNotified.has(taskKey);
 
-        if (!alreadyNotified) {
-          this.onTaskDue(task);
-          
-          if (this.notificationState) {
-            this.notificationState.markNotified(taskKey);
-            // Save state asynchronously
-            void this.notificationState.save();
-          } else {
-            this.fallbackNotified.add(taskKey);
+          if (!alreadyNotified) {
+            this.onTaskDue(task);
+
+            if (this.notificationState) {
+              this.notificationState.markNotified(taskKey);
+              // Save state asynchronously
+              void this.notificationState.save();
+            } else {
+              this.fallbackNotified.add(taskKey);
+            }
+
+            logger.info(`Task due: ${task.name}`, { taskId: task.id, dueAt: task.dueAt });
           }
+        }
 
-          logger.info(`Task due: ${task.name}`, { taskId: task.id, dueAt: task.dueAt });
+        // Check if task is missed
+        const lastCompletedAt = task.lastCompletedAt
+          ? new Date(task.lastCompletedAt)
+          : null;
+
+        if (
+          isDue &&
+          this.onTaskMissed &&
+          now.getTime() - dueDate.getTime() >= MISSED_GRACE_PERIOD_MS &&
+          (!lastCompletedAt || lastCompletedAt < dueDate)
+        ) {
+          const alreadyMissed = this.notificationState
+            ? this.notificationState.hasMissed(taskKey)
+            : this.fallbackMissed.has(taskKey);
+
+          if (!alreadyMissed) {
+            this.onTaskMissed(task);
+
+            if (this.notificationState) {
+              this.notificationState.markMissed(taskKey);
+              this.notificationState.incrementEscalation(task.id);
+              // Save state asynchronously
+              void this.notificationState.save();
+            } else {
+              this.fallbackMissed.add(taskKey);
+            }
+
+            logger.warn(`Task missed: ${task.name}`, { taskId: task.id, dueAt: task.dueAt });
+          }
         }
       }
-
-      // Check if task is missed
-      const lastCompletedAt = task.lastCompletedAt
-        ? new Date(task.lastCompletedAt)
-        : null;
-
-      if (
-        isDue &&
-        this.onTaskMissed &&
-        now.getTime() - dueDate.getTime() >= MISSED_GRACE_PERIOD_MS &&
-        (!lastCompletedAt || lastCompletedAt < dueDate)
-      ) {
-        const alreadyMissed = this.notificationState
-          ? this.notificationState.hasMissed(taskKey)
-          : this.fallbackMissed.has(taskKey);
-
-        if (!alreadyMissed) {
-          this.onTaskMissed(task);
-          
-          if (this.notificationState) {
-            this.notificationState.markMissed(taskKey);
-            this.notificationState.incrementEscalation(task.id);
-            // Save state asynchronously
-            void this.notificationState.save();
-          } else {
-            this.fallbackMissed.add(taskKey);
-          }
-
-          logger.warn(`Task missed: ${task.name}`, { taskId: task.id, dueAt: task.dueAt });
-        }
-      }
+    } finally {
+      this.isChecking = false;
     }
   }
 
@@ -348,7 +371,8 @@ export class Scheduler {
     let nextDue = currentDue;
     let iterations = 0;
 
-    // Keep advancing until we find a future occurrence
+    // Keep advancing until we find a future occurrence, but cap iterations to
+    // avoid infinite loops for corrupt timestamps or extreme downtime.
     while (nextDue < now && iterations < MAX_RECOVERY_ITERATIONS) {
       nextDue = this.recurrenceEngine.calculateNext(nextDue, task.frequency);
       iterations++;

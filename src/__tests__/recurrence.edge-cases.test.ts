@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { RecurrenceEngine } from "@/core/engine/RecurrenceEngine";
 import type { Frequency } from "@/core/models/Frequency";
+import { MAX_RECOVERY_ITERATIONS } from "@/utils/constants";
 
 describe("RecurrenceEngine - Edge Cases", () => {
   const engine = new RecurrenceEngine();
@@ -110,8 +111,71 @@ describe("RecurrenceEngine - Edge Cases", () => {
         firstOccurrence
       );
 
-      // Should hit safety limit of 100 iterations
-      expect(missed.length).toBeLessThanOrEqual(100);
+      // Should hit safety limit of MAX_RECOVERY_ITERATIONS
+      expect(missed.length).toBeLessThanOrEqual(MAX_RECOVERY_ITERATIONS);
+    });
+
+    it("should cap missed daily occurrences for multi-year downtime", () => {
+      const lastCheckedAt = new Date("2018-01-01T09:00:00Z");
+      const now = new Date("2024-01-01T09:00:00Z");
+      const firstOccurrence = new Date("2018-01-01T09:00:00Z");
+      const frequency: Frequency = {
+        type: "daily",
+        interval: 1,
+        time: "09:00",
+      };
+
+      const missed = engine.getMissedOccurrences(
+        lastCheckedAt,
+        now,
+        frequency,
+        firstOccurrence
+      );
+
+      expect(missed.length).toBeLessThanOrEqual(MAX_RECOVERY_ITERATIONS);
+    });
+
+    it("should cover weekly downtime without skipping occurrences", () => {
+      const lastCheckedAt = new Date("2024-02-01T09:00:00Z");
+      const now = new Date("2024-03-01T09:00:00Z");
+      const firstOccurrence = new Date("2024-01-04T09:00:00Z");
+      const frequency: Frequency = {
+        type: "weekly",
+        interval: 1,
+        time: "09:00",
+      };
+
+      const missed = engine.getMissedOccurrences(
+        lastCheckedAt,
+        now,
+        frequency,
+        firstOccurrence
+      );
+
+      expect(missed.length).toBeGreaterThan(2);
+      expect(missed.length).toBeLessThan(6);
+    });
+
+    it("should cover monthly downtime across year boundaries", () => {
+      const lastCheckedAt = new Date("2023-11-15T09:00:00Z");
+      const now = new Date("2024-03-15T09:00:00Z");
+      const firstOccurrence = new Date("2023-10-15T09:00:00Z");
+      const frequency: Frequency = {
+        type: "monthly",
+        interval: 1,
+        time: "09:00",
+        dayOfMonth: 15,
+      };
+
+      const missed = engine.getMissedOccurrences(
+        lastCheckedAt,
+        now,
+        frequency,
+        firstOccurrence
+      );
+
+      expect(missed.length).toBe(3);
+      expect(missed[0].toISOString()).toContain("2023-12-15T09:00:00");
     });
   });
 
@@ -171,6 +235,35 @@ describe("RecurrenceEngine - Edge Cases", () => {
       next = engine.calculateNext(next, frequency);
       expect(next.getDate()).toBe(30);
       expect(next.getMonth()).toBe(3);
+    });
+
+    it("should resume original day-of-month after February clipping", () => {
+      const currentDue = new Date("2023-01-31T09:00:00Z");
+      const frequency: Frequency = {
+        type: "monthly",
+        interval: 1,
+        time: "09:00",
+        dayOfMonth: 31,
+      };
+
+      const feb = engine.calculateNext(currentDue, frequency);
+      expect(feb.toISOString()).toBe("2023-02-28T09:00:00.000Z");
+
+      const mar = engine.calculateNext(feb, frequency);
+      expect(mar.toISOString()).toBe("2023-03-31T09:00:00.000Z");
+    });
+
+    it("should roll over year boundaries correctly", () => {
+      const currentDue = new Date("2023-12-31T09:00:00Z");
+      const frequency: Frequency = {
+        type: "monthly",
+        interval: 1,
+        time: "09:00",
+        dayOfMonth: 31,
+      };
+
+      const next = engine.calculateNext(currentDue, frequency);
+      expect(next.toISOString()).toBe("2024-01-31T09:00:00.000Z");
     });
   });
 

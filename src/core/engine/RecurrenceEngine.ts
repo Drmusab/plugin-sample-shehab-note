@@ -136,6 +136,9 @@ export class RecurrenceEngine {
     dayOfMonth?: number
   ): Date {
     const targetDay = dayOfMonth ?? currentDue.getDate();
+    // Preserve the original day-of-month intent (e.g., 31st) and clip only for
+    // the target month. This ensures Jan 31 -> Feb 28/29, then resumes on Mar 31
+    // because the stored targetDay stays 31, avoiding "sticky" February dates.
     const currentYear = currentDue.getFullYear();
     const currentMonth = currentDue.getMonth();
     const totalMonths = currentMonth + interval;
@@ -165,7 +168,8 @@ export class RecurrenceEngine {
     const occurrences: Date[] = [];
     let currentDate = new Date(firstOccurrence);
 
-    // Safety limit to prevent infinite loops
+    // Safety limit to prevent infinite loops for malformed frequencies or
+    // extreme ranges while keeping recurrence deterministic.
     let iterations = 0;
 
     while (currentDate <= endDate && iterations < MAX_RECURRENCE_ITERATIONS) {
@@ -197,7 +201,8 @@ export class RecurrenceEngine {
     const missed: Date[] = [];
     let current = new Date(firstOccurrence);
     
-    // Advance to first occurrence after lastCheckedAt
+    // Advance to first occurrence after lastCheckedAt. Uses the same recurrence
+    // math to preserve month-end clipping and stored dayOfMonth intent.
     let advanceIterations = 0;
     
     while (current <= lastCheckedAt && advanceIterations < MAX_RECURRENCE_ITERATIONS) {
@@ -205,7 +210,8 @@ export class RecurrenceEngine {
       advanceIterations++;
     }
     
-    // Collect all occurrences between lastCheckedAt and now
+    // Collect all occurrences between lastCheckedAt and now with a recovery
+    // cap to avoid runaway loops for long downtime or corrupt timestamps.
     let iterations = 0;
     
     while (current < now && iterations < MAX_RECOVERY_ITERATIONS) {
