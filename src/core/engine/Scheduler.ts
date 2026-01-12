@@ -4,8 +4,9 @@ import { RecurrenceEngine } from "./RecurrenceEngine";
 import { NotificationState } from "./NotificationState";
 import { TimezoneHandler } from "./TimezoneHandler";
 import { recordCompletion, recordMiss } from "@/core/models/Task";
-import { MISSED_GRACE_PERIOD_MS, SCHEDULER_INTERVAL_MS } from "@/utils/constants";
+import { MISSED_GRACE_PERIOD_MS, SCHEDULER_INTERVAL_MS, LAST_RUN_TIMESTAMP_KEY, MAX_RECOVERY_ITERATIONS } from "@/utils/constants";
 import * as logger from "@/utils/logger";
+import type { Plugin } from "siyuan";
 
 /**
  * Scheduler manages task timing and triggers notifications
@@ -21,17 +22,20 @@ export class Scheduler {
   private onTaskDue: ((task: Task) => void) | null = null;
   private onTaskMissed: ((task: Task) => void) | null = null;
   private intervalMs: number;
+  private plugin: Plugin | null = null;
 
   constructor(
     storage: TaskStorage,
     notificationState?: NotificationState,
-    intervalMs: number = SCHEDULER_INTERVAL_MS
+    intervalMs: number = SCHEDULER_INTERVAL_MS,
+    plugin?: Plugin
   ) {
     this.storage = storage;
     this.recurrenceEngine = new RecurrenceEngine();
     this.notificationState = notificationState || null;
     this.timezoneHandler = new TimezoneHandler();
     this.intervalMs = intervalMs;
+    this.plugin = plugin || null;
   }
 
   /**
@@ -266,6 +270,129 @@ export class Scheduler {
    */
   async skipTaskOccurrence(taskId: string): Promise<void> {
     return this.skipOccurrence(taskId);
+  }
+
+  /**
+   * Recover missed tasks from the last plugin session
+   * Based on patterns from siyuan-dailynote-today (RoutineEventHandler)
+   */
+  async recoverMissedTasks(): Promise<void> {
+    const lastRunAt = await this.loadLastRunTimestamp();
+    const now = new Date();
+    
+    if (!lastRunAt) {
+      // First run, save timestamp and exit
+      await this.saveLastRunTimestamp(now);
+      logger.info("First run detected, no recovery needed");
+      return;
+    }
+
+    logger.info(`Recovering missed tasks since ${lastRunAt.toISOString()}`);
+    
+    for (const task of this.storage.getEnabledTasks()) {
+      try {
+        const missedOccurrences = this.recurrenceEngine.getMissedOccurrences(
+          lastRunAt,
+          now,
+          task.frequency,
+          new Date(task.createdAt)
+        );
+        
+        for (const missedAt of missedOccurrences) {
+          const taskKey = `${task.id}:${missedAt.toISOString()}`;
+          const hasNotified = this.notificationState
+            ? this.notificationState.hasNotified(taskKey)
+            : this.fallbackNotified.has(taskKey);
+
+          if (!hasNotified && this.onTaskMissed) {
+            this.onTaskMissed(task);
+            
+            if (this.notificationState) {
+              this.notificationState.markMissed(taskKey);
+            } else {
+              this.fallbackMissed.add(taskKey);
+            }
+          }
+        }
+        
+        // Advance task to next future occurrence if it's in the past
+        await this.advanceToNextFutureOccurrence(task, now);
+      } catch (err) {
+        logger.error(`Failed to recover task ${task.id}:`, err);
+      }
+    }
+    
+    // Save notification state if available
+    if (this.notificationState) {
+      await this.notificationState.save();
+    }
+    
+    await this.saveLastRunTimestamp(now);
+    logger.info("Missed task recovery completed");
+  }
+
+  /**
+   * Advance a task to the next occurrence in the future
+   */
+  private async advanceToNextFutureOccurrence(task: Task, now: Date): Promise<void> {
+    const currentDue = new Date(task.dueAt);
+    
+    if (currentDue >= now) {
+      // Task is already in the future
+      return;
+    }
+
+    let nextDue = currentDue;
+    let iterations = 0;
+
+    // Keep advancing until we find a future occurrence
+    while (nextDue < now && iterations < MAX_RECOVERY_ITERATIONS) {
+      nextDue = this.recurrenceEngine.calculateNext(nextDue, task.frequency);
+      iterations++;
+    }
+
+    if (nextDue > currentDue) {
+      task.dueAt = nextDue.toISOString();
+      await this.storage.saveTask(task);
+      logger.info(`Advanced task "${task.name}" to ${nextDue.toISOString()}`);
+    }
+  }
+
+  /**
+   * Load last run timestamp from storage
+   */
+  private async loadLastRunTimestamp(): Promise<Date | null> {
+    if (!this.plugin) {
+      return null;
+    }
+
+    try {
+      const data = await this.plugin.loadData(LAST_RUN_TIMESTAMP_KEY);
+      if (data && data.timestamp) {
+        return new Date(data.timestamp);
+      }
+    } catch (err) {
+      logger.error("Failed to load last run timestamp:", err);
+    }
+    
+    return null;
+  }
+
+  /**
+   * Save last run timestamp to storage
+   */
+  private async saveLastRunTimestamp(timestamp: Date): Promise<void> {
+    if (!this.plugin) {
+      return;
+    }
+
+    try {
+      await this.plugin.saveData(LAST_RUN_TIMESTAMP_KEY, {
+        timestamp: timestamp.toISOString(),
+      });
+    } catch (err) {
+      logger.error("Failed to save last run timestamp:", err);
+    }
   }
 
   /**

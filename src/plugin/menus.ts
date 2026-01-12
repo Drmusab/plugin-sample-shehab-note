@@ -1,8 +1,10 @@
 /**
  * Block context menu integration for SiYuan
+ * Based on patterns from plugin-block-reminder (blockIconEvent) and siyuan-plugin-task-list (addBlockMenuForTaskNode)
  */
 
 import type { Plugin } from "siyuan";
+import { TaskManager } from "@/core/managers/TaskManager";
 import * as logger from "@/utils/logger";
 
 /**
@@ -10,15 +12,98 @@ import * as logger from "@/utils/logger";
  */
 export function registerBlockMenu(plugin: Plugin): void {
   // Add context menu item when clicking block icons
-  plugin.addDock({
-    type: "file",
-    position: "LeftBottom",
-    size: { width: 200, height: 0 },
-    icon: "",
-    title: "",
+  plugin.eventBus.on('click-blockicon', ({ detail }: any) => {
+    const blockElements = detail.blockElements;
+    if (!blockElements || blockElements.length === 0) {
+      return;
+    }
+    
+    const blockElement = blockElements[0];
+    const blockId = blockElement?.getAttribute('data-node-id');
+    if (!blockId) {
+      return;
+    }
+    
+    const blockContent = blockElement?.textContent || '';
+    
+    // Add "Create Recurring Task" menu item
+    detail.menu.addItem({
+      icon: 'iconCalendar',
+      label: plugin.i18n?.createRecurringTask || 'Create Recurring Task',
+      click: () => {
+        window.dispatchEvent(new CustomEvent('recurring-task-create', {
+          detail: {
+            source: 'block-menu',
+            linkedBlockId: blockId,
+            linkedBlockContent: blockContent,
+            suggestedName: extractTaskName(blockContent),
+            suggestedTime: extractTimeFromContent(blockContent),
+          }
+        }));
+      },
+    });
+    
+    // Check if block already has a recurring task
+    try {
+      const manager = TaskManager.getInstance();
+      if (manager.isReady()) {
+        const storage = manager.getStorage();
+        const existingTask = storage.getTaskByBlockId(blockId);
+        
+        if (existingTask) {
+          // Add separator
+          detail.menu.addSeparator();
+          
+          // Add quick actions for existing task
+          detail.menu.addItem({
+            icon: 'iconCheck',
+            label: plugin.i18n?.completeTask || 'Complete Task',
+            click: () => {
+              window.dispatchEvent(new CustomEvent('recurring-task-complete', {
+                detail: { taskId: existingTask.id }
+              }));
+            },
+          });
+          
+          // Add snooze submenu
+          const snoozeSubmenu: any[] = [
+            {
+              label: '15 minutes',
+              click: () => snoozeTask(existingTask.id, 15),
+            },
+            {
+              label: '1 hour',
+              click: () => snoozeTask(existingTask.id, 60),
+            },
+            {
+              label: 'Tomorrow',
+              click: () => snoozeToTomorrow(existingTask.id),
+            },
+          ];
+          
+          detail.menu.addItem({
+            icon: 'iconClock',
+            label: plugin.i18n?.snoozeTask || 'Snooze Task',
+            submenu: snoozeSubmenu,
+          });
+        }
+      }
+    } catch (err) {
+      // TaskManager not available, skip quick actions
+      logger.debug('TaskManager not available for quick actions');
+    }
   });
 
   logger.info("Registered block context menu");
+}
+
+/**
+ * Extract task name from block content
+ */
+function extractTaskName(content: string): string {
+  // Extract first line or first 50 chars
+  const firstLine = content.split('\n')[0].trim();
+  return firstLine.length > 50 ? firstLine.substring(0, 50) + '...' : firstLine;
 }
 
 /**
@@ -66,4 +151,30 @@ export function createTaskFromBlock(blockId: string, blockContent: string): void
   window.dispatchEvent(event);
   
   logger.info(`Creating task from block: ${blockId}`);
+}
+
+/**
+ * Snooze a task by specified minutes
+ */
+function snoozeTask(taskId: string, minutes: number): void {
+  window.dispatchEvent(new CustomEvent('task-snooze', {
+    detail: { taskId, minutes }
+  }));
+  logger.info(`Snoozing task ${taskId} for ${minutes} minutes`);
+}
+
+/**
+ * Snooze a task to tomorrow
+ */
+function snoozeToTomorrow(taskId: string): void {
+  // Calculate minutes until tomorrow at the same time
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const minutesUntilTomorrow = Math.floor((tomorrow.getTime() - now.getTime()) / (60 * 1000));
+  
+  window.dispatchEvent(new CustomEvent('task-snooze', {
+    detail: { taskId, minutes: minutesUntilTomorrow }
+  }));
+  logger.info(`Snoozing task ${taskId} to tomorrow`);
 }

@@ -81,6 +81,23 @@ src/
 
 ### Creating a Task
 
+#### Method 1: From Block Menu (NEW)
+
+1. Right-click on any block icon in your document
+2. Select "Create Recurring Task" from the context menu
+3. The task form opens with pre-filled details from the block:
+   - Task name extracted from first line of block
+   - Time extracted if present (e.g., "09:00", "2:30 PM")
+   - Block automatically linked for quick access
+4. Complete the task details and click "Save Task"
+
+**Quick Actions for Linked Blocks:**
+- If a block already has a task, the menu shows:
+  - ✅ Complete Task - Mark task done and reschedule
+  - 🕒 Snooze Task - Delay task (15 min, 1 hour, or tomorrow)
+
+#### Method 2: From Dashboard
+
 1. Open the "Recurring Tasks" dock panel
 2. Navigate to the "All Tasks" tab
 3. Click "Create New Task"
@@ -89,7 +106,7 @@ src/
    - Due date & time
    - Frequency (daily/weekly/monthly)
    - Interval (e.g., every 2 weeks)
-   - Optional: Alert payload (note, media, link)
+   - Optional: Link to a block, add tags, set priority
 5. Click "Save Task"
 
 ### Configuring Notifications
@@ -108,6 +125,20 @@ src/
 - **Today & Overdue Tab**: View and complete tasks due today or earlier
 - **All Tasks Tab**: View all recurring tasks, edit, delete, or toggle enabled/disabled
 - **Timeline Tab**: Visual calendar view of upcoming tasks
+- **Block Context Menu**: Right-click any block with a linked task for quick actions
+
+### Missed Task Recovery (NEW)
+
+The plugin now automatically recovers missed tasks after being offline:
+
+- When the plugin restarts, it checks for tasks that were due while offline
+- All missed occurrences are detected and notifications are sent
+- Overdue tasks are automatically advanced to their next future occurrence
+- No manual intervention needed - recovery happens automatically
+
+**Example:** If your plugin was offline for 3 days and a daily task was due at 9 AM each day:
+- You'll receive notifications for all 3 missed days
+- The task will be rescheduled to tomorrow at 9 AM
 
 ## Configuration
 

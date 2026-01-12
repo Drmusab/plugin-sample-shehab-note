@@ -1,5 +1,6 @@
 import type { Frequency } from "@/core/models/Frequency";
 import { addDays, addWeeks, setTime, parseTime } from "@/utils/date";
+import { MAX_RECURRENCE_ITERATIONS, MAX_RECOVERY_ITERATIONS } from "@/utils/constants";
 
 /**
  * RecurrenceEngine calculates next occurrence dates based on frequency rules
@@ -165,10 +166,9 @@ export class RecurrenceEngine {
     let currentDate = new Date(firstOccurrence);
 
     // Safety limit to prevent infinite loops
-    const maxIterations = 1000;
     let iterations = 0;
 
-    while (currentDate <= endDate && iterations < maxIterations) {
+    while (currentDate <= endDate && iterations < MAX_RECURRENCE_ITERATIONS) {
       if (currentDate >= startDate) {
         occurrences.push(new Date(currentDate));
       }
@@ -177,5 +177,43 @@ export class RecurrenceEngine {
     }
 
     return occurrences;
+  }
+
+  /**
+   * Get all missed occurrences between two dates
+   * Used for recovering missed tasks after plugin restart
+   * @param lastCheckedAt Last time tasks were checked
+   * @param now Current time
+   * @param frequency Recurrence rule
+   * @param firstOccurrence First occurrence date (task creation date)
+   * @returns Array of missed occurrence dates
+   */
+  getMissedOccurrences(
+    lastCheckedAt: Date,
+    now: Date,
+    frequency: Frequency,
+    firstOccurrence: Date
+  ): Date[] {
+    const missed: Date[] = [];
+    let current = new Date(firstOccurrence);
+    
+    // Advance to first occurrence after lastCheckedAt
+    let advanceIterations = 0;
+    
+    while (current <= lastCheckedAt && advanceIterations < MAX_RECURRENCE_ITERATIONS) {
+      current = this.calculateNext(current, frequency);
+      advanceIterations++;
+    }
+    
+    // Collect all occurrences between lastCheckedAt and now
+    let iterations = 0;
+    
+    while (current < now && iterations < MAX_RECOVERY_ITERATIONS) {
+      missed.push(new Date(current));
+      current = this.calculateNext(current, frequency);
+      iterations++;
+    }
+    
+    return missed;
   }
 }

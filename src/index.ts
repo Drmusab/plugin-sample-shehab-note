@@ -49,7 +49,7 @@ export default class RecurringTasksPlugin extends Plugin {
     await this.eventService.init();
 
     // Initialize scheduler with notification state
-    this.scheduler = new Scheduler(this.storage, this.notificationState);
+    this.scheduler = new Scheduler(this.storage, this.notificationState, SCHEDULER_INTERVAL_MS, this);
     this.scheduler.start(
       async (task) => {
         logger.info(`Task due: ${task.name}`);
@@ -62,6 +62,13 @@ export default class RecurringTasksPlugin extends Plugin {
         await this.eventService.emitTaskEvent("task.missed", task, escalationLevel);
       }
     );
+
+    // Recover missed tasks from previous session
+    try {
+      await this.scheduler.recoverMissedTasks();
+    } catch (err) {
+      logger.error("Failed to recover missed tasks", err);
+    }
 
     // Register slash commands and hotkeys
     registerCommands(this, this.storage);

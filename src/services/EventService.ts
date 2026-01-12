@@ -40,7 +40,18 @@ export class EventService {
   async init(): Promise<void> {
     await this.loadConfig();
     await this.loadQueue();
+    await this.flushQueueOnStartup();
     this.startQueueWorker();
+  }
+
+  /**
+   * Flush queue on startup to handle pending events from previous session
+   */
+  async flushQueueOnStartup(): Promise<void> {
+    if (this.queue.length > 0) {
+      console.log(`Found ${this.queue.length} pending events from previous session`);
+      await this.flushQueue();
+    }
   }
 
   /**
@@ -145,24 +156,44 @@ export class EventService {
   /**
    * Test connection with n8n webhook
    */
-  async testConnection(): Promise<boolean> {
+  async testConnection(): Promise<{ success: boolean; message: string }> {
     if (!this.config.n8n.enabled || !this.config.n8n.webhookUrl) {
-      return false;
+      return { success: false, message: 'n8n webhook not configured' };
     }
 
-    const dedupeKey = `test.ping:${new Date().toISOString()}`;
-    const payload: TaskEventPayload = {
-      event: "test.ping",
-      source: PLUGIN_EVENT_SOURCE,
-      version: PLUGIN_EVENT_VERSION,
-      occurredAt: new Date().toISOString(),
-      delivery: {
-        dedupeKey,
-        attempt: 1,
-      },
-    };
+    try {
+      const dedupeKey = `test.ping:${new Date().toISOString()}`;
+      const payload: TaskEventPayload = {
+        event: "test.ping",
+        source: PLUGIN_EVENT_SOURCE,
+        version: PLUGIN_EVENT_VERSION,
+        occurredAt: new Date().toISOString(),
+        delivery: {
+          dedupeKey,
+          attempt: 1,
+        },
+      };
 
-    return this.sendPayload(payload, true);
+      const response = await this.fetcher(this.config.n8n.webhookUrl, {
+        method: 'POST',
+        headers: await this.buildHeaders(payload),
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        return { success: true, message: 'Connection successful' };
+      } else {
+        return { 
+          success: false, 
+          message: `HTTP ${response.status}: ${response.statusText}` 
+        };
+      }
+    } catch (err: any) {
+      return { 
+        success: false, 
+        message: `Connection failed: ${err.message}` 
+      };
+    }
   }
 
   /**
@@ -326,37 +357,47 @@ export class EventService {
     }
   }
 
+  /**
+   * Build headers for webhook request
+   */
+  private async buildHeaders(payload: TaskEventPayload): Promise<Record<string, string>> {
+    const payloadStr = JSON.stringify(payload);
+    const timestamp = new Date().toISOString();
+    
+    // Generate HMAC signature if secret is configured
+    let signature = "";
+    if (this.config.n8n.sharedSecret) {
+      signature = await this.generateSignature(
+        payloadStr + timestamp,
+        this.config.n8n.sharedSecret
+      );
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Shehab-Event": payload.event,
+      "X-Shehab-Timestamp": timestamp,
+    };
+
+    if (signature) {
+      headers["X-Shehab-Signature"] = signature;
+    }
+
+    // Legacy header for backward compatibility
+    if (this.config.n8n.sharedSecret) {
+      headers["X-Shehab-Note-Secret"] = this.config.n8n.sharedSecret;
+    }
+
+    return headers;
+  }
+
   private async sendPayload(
     payload: TaskEventPayload,
     expectOkResponse = false
   ): Promise<boolean> {
     try {
       const payloadStr = JSON.stringify(payload);
-      const timestamp = new Date().toISOString();
-      
-      // Generate HMAC signature if secret is configured
-      let signature = "";
-      if (this.config.n8n.sharedSecret) {
-        signature = await this.generateSignature(
-          payloadStr + timestamp,
-          this.config.n8n.sharedSecret
-        );
-      }
-
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        "X-Shehab-Event": payload.event,
-        "X-Shehab-Timestamp": timestamp,
-      };
-
-      if (signature) {
-        headers["X-Shehab-Signature"] = signature;
-      }
-
-      // Legacy header for backward compatibility
-      if (this.config.n8n.sharedSecret) {
-        headers["X-Shehab-Note-Secret"] = this.config.n8n.sharedSecret;
-      }
+      const headers = await this.buildHeaders(payload);
 
       const response = await this.fetcher(this.config.n8n.webhookUrl, {
         method: "POST",

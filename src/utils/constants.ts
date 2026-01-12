@@ -61,6 +61,13 @@ export const DEFAULT_SNOOZE_MINUTES = 15;
 
 export const MAX_RECENT_COMPLETIONS = 10;
 
+/**
+ * Safety limits for iteration loops
+ */
+export const MAX_RECURRENCE_ITERATIONS = 1000;
+
+export const MAX_RECOVERY_ITERATIONS = 100;
+
 export const SNOOZE_OPTIONS = [
   { label: "15 minutes", minutes: 15 },
   { label: "30 minutes", minutes: 30 },
@@ -103,3 +110,15 @@ export const WEEKDAY_NAMES = [
 ];
 
 export const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/**
+ * Last run timestamp key for missed task recovery
+ */
+export const LAST_RUN_TIMESTAMP_KEY = "last-run-timestamp";
+
+/**
+ * Block attribute keys for syncing tasks to blocks
+ */
+export const BLOCK_ATTR_TASK_ID = "custom-recurring-task-id";
+export const BLOCK_ATTR_TASK_DUE = "custom-recurring-task-due";
+export const BLOCK_ATTR_TASK_ENABLED = "custom-recurring-task-enabled";
