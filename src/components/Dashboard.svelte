@@ -18,6 +18,9 @@
 
   let { storage, scheduler, eventService }: Props = $props();
 
+  // Get timezone handler from scheduler
+  const timezoneHandler = scheduler.getTimezoneHandler();
+
   let activeTab = $state<"today" | "all" | "timeline">("today");
   let showTaskForm = $state(false);
   let showSettings = $state(false);
@@ -174,6 +177,7 @@
           onDelay={handleTaskDelay}
           onSkip={handleTaskSkip}
           onEdit={handleEditTask}
+          {timezoneHandler}
         />
       {:else if activeTab === "all"}
         <AllTasksTab

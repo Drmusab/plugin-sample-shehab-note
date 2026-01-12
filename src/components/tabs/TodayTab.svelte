@@ -8,9 +8,10 @@
     onDelay: (task: Task) => void;
     onSkip: (task: Task) => void;
     onEdit?: (task: Task) => void;
+    timezoneHandler?: any;
   }
 
-  let { tasks, onDone, onDelay, onSkip, onEdit }: Props = $props();
+  let { tasks, onDone, onDelay, onSkip, onEdit, timezoneHandler }: Props = $props();
 
   const sortedTasks = $derived(
     [...tasks].sort(
@@ -35,7 +36,7 @@
       </div>
     {:else}
       {#each sortedTasks as task (task.id)}
-        <TaskCard {task} {onDone} {onDelay} {onSkip} {onEdit} />
+        <TaskCard {task} {onDone} {onDelay} {onSkip} {onEdit} {timezoneHandler} />
       {/each}
     {/if}
   </div>
