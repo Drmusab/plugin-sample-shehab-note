@@ -14,6 +14,8 @@ export class Scheduler {
   private storage: TaskStorage;
   private recurrenceEngine: RecurrenceEngine;
   private notificationState: NotificationState | null = null;
+  private fallbackNotified: Set<string> = new Set();
+  private fallbackMissed: Set<string> = new Set();
   private timezoneHandler: TimezoneHandler;
   private intervalId: number | null = null;
   private onTaskDue: ((task: Task) => void) | null = null;
@@ -100,7 +102,7 @@ export class Scheduler {
       if (isDue && this.onTaskDue) {
         const alreadyNotified = this.notificationState
           ? this.notificationState.hasNotified(taskKey)
-          : false;
+          : this.fallbackNotified.has(taskKey);
 
         if (!alreadyNotified) {
           this.onTaskDue(task);
@@ -109,6 +111,8 @@ export class Scheduler {
             this.notificationState.markNotified(taskKey);
             // Save state asynchronously
             void this.notificationState.save();
+          } else {
+            this.fallbackNotified.add(taskKey);
           }
 
           logger.info(`Task due: ${task.name}`, { taskId: task.id, dueAt: task.dueAt });
@@ -128,7 +132,7 @@ export class Scheduler {
       ) {
         const alreadyMissed = this.notificationState
           ? this.notificationState.hasMissed(taskKey)
-          : false;
+          : this.fallbackMissed.has(taskKey);
 
         if (!alreadyMissed) {
           this.onTaskMissed(task);
@@ -138,6 +142,8 @@ export class Scheduler {
             this.notificationState.incrementEscalation(task.id);
             // Save state asynchronously
             void this.notificationState.save();
+          } else {
+            this.fallbackMissed.add(taskKey);
           }
 
           logger.warn(`Task missed: ${task.name}`, { taskId: task.id, dueAt: task.dueAt });

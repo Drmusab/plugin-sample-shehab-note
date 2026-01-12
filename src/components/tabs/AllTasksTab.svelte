@@ -30,7 +30,7 @@
     const unit = type === "daily" ? "day" : type === "weekly" ? "week" : "month";
     const base = interval === 1 ? `Every ${unit}` : `Every ${interval} ${unit}s`;
     if (type === "weekly") {
-      const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const weekdayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
       return `${base} on ${task.frequency.weekdays
         .map((day) => weekdayNames[day] ?? day)
         .join(", ")}`;

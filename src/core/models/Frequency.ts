@@ -20,7 +20,7 @@ export type Frequency =
       type: "weekly";
       /** Interval multiplier (e.g., every 2 weeks) */
       interval: number;
-      /** For weekly rules: days of week (0-6, Sunday-Saturday) */
+      /** For weekly rules: days of week (0-6, Monday-Sunday) */
       weekdays: number[];
       /** Optional fixed time in HH:mm format (e.g., "09:00") */
       time?: string;

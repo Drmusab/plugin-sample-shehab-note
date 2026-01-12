@@ -1,5 +1,5 @@
 import type { Frequency } from "@/core/models/Frequency";
-import { addDays, addWeeks, addMonths, setTime, parseTime } from "@/utils/date";
+import { addDays, addWeeks, setTime, parseTime } from "@/utils/date";
 
 /**
  * RecurrenceEngine calculates next occurrence dates based on frequency rules
@@ -97,7 +97,7 @@ export class RecurrenceEngine {
     }
 
     // Find next occurrence on specified weekdays
-    const currentDay = currentDue.getDay();
+    const currentDay = (currentDue.getDay() + 6) % 7;
     let daysToAdd = 0;
     let found = false;
 
@@ -134,14 +134,16 @@ export class RecurrenceEngine {
     interval: number,
     dayOfMonth?: number
   ): Date {
-    const nextBase = addMonths(currentDue, interval);
     const targetDay = dayOfMonth ?? currentDue.getDate();
-    const year = nextBase.getFullYear();
-    const month = nextBase.getMonth();
+    const currentYear = currentDue.getFullYear();
+    const currentMonth = currentDue.getMonth();
+    const totalMonths = currentMonth + interval;
+    const year = currentYear + Math.floor(totalMonths / 12);
+    const month = ((totalMonths % 12) + 12) % 12;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const day = Math.min(targetDay, daysInMonth);
-    const nextDate = new Date(nextBase);
-    nextDate.setDate(day);
+    const nextDate = new Date(currentDue);
+    nextDate.setFullYear(year, month, day);
     return nextDate;
   }
 

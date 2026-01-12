@@ -107,11 +107,11 @@ export class TimezoneHandler {
   getRelativeTime(date: Date): string {
     const now = new Date();
     const diffMs = date.getTime() - now.getTime();
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffMinutes = Math.trunc(diffMs / (1000 * 60));
+    const diffHours = Math.trunc(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.trunc(diffMs / (1000 * 60 * 60 * 24));
 
-    if (Math.abs(diffMinutes) < 1) {
+    if (Math.abs(diffMs) < 1000 * 60) {
       return "now";
     } else if (Math.abs(diffMinutes) < 60) {
       return diffMinutes > 0 ? `in ${diffMinutes}m` : `${-diffMinutes}m ago`;
