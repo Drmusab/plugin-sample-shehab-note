@@ -5,6 +5,7 @@
   import type { Scheduler } from "@/core/engine/Scheduler";
   import type { EventService } from "@/services/EventService";
   import { toast } from "@/utils/notifications";
+  import { isValidFrequency } from "@/core/models/Frequency";
   import {
     getTodayAndOverdueTasks,
     removeTask,
@@ -100,6 +101,16 @@
   }
 
   async function handleSaveTask(task: Task) {
+    // Add validation
+    if (!task.name?.trim()) {
+      toast.error("Task name is required");
+      return;
+    }
+    if (!isValidFrequency(task.frequency)) {
+      toast.error("Invalid frequency configuration");
+      return;
+    }
+    
     const nextTask = { ...task };
     allTasks = upsertTask(allTasks, nextTask);
     showTaskForm = false;

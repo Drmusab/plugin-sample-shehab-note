@@ -132,11 +132,16 @@ export default class RecurringTasksPlugin extends Plugin {
   }
 
   private addEventListeners() {
-    // Listen for custom events from commands and menus
-    window.addEventListener("recurring-task-create", this.handleCreateTaskEvent);
-    window.addEventListener("recurring-task-settings", this.handleSettingsEvent);
-    window.addEventListener("recurring-task-complete", this.handleCompleteTaskEvent);
-    window.addEventListener("task-snooze", this.handleSnoozeTaskEvent);
+    try {
+      // Listen for custom events from commands and menus
+      window.addEventListener("recurring-task-create", this.handleCreateTaskEvent);
+      window.addEventListener("recurring-task-settings", this.handleSettingsEvent);
+      window.addEventListener("recurring-task-complete", this.handleCompleteTaskEvent);
+      window.addEventListener("task-snooze", this.handleSnoozeTaskEvent);
+    } catch (err) {
+      logger.error("Failed to add event listeners", err);
+      this.removeEventListeners(); // Cleanup partial listeners
+    }
   }
 
   private removeEventListeners() {

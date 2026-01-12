@@ -35,15 +35,15 @@
     testResults.n8n = { success: false, message: "Testing..." };
 
     try {
-      const success = await eventService.testConnection();
+      const result = await eventService.testConnection();
       testResults.n8n = {
-        success,
-        message: success ? "Test successful!" : "Test failed. Check configuration.",
+        success: result.success,
+        message: result.success ? "Test successful!" : result.message || "Test failed. Check configuration.",
       };
     } catch (err) {
       testResults.n8n = {
         success: false,
-        message: "Error: " + err,
+        message: "Error: " + (err instanceof Error ? err.message : String(err)),
       };
     } finally {
       testingChannel = null;

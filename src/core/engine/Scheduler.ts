@@ -24,6 +24,7 @@ export class Scheduler {
   private timezoneHandler: TimezoneHandler;
   private intervalId: number | null = null;
   private isChecking = false;
+  private lastCheckStartTime: number = 0;
   private isRunning = false;
   private intervalMs: number;
   private plugin: Plugin | null = null;
@@ -108,10 +109,19 @@ export class Scheduler {
    * Check for tasks that are due and trigger notifications
    */
   private checkDueTasks(): void {
+    // Add timeout recovery - if isChecking has been true for > 30 seconds, force reset
     if (this.isChecking) {
-      return;
+      const checkingDuration = Date.now() - (this.lastCheckStartTime || 0);
+      if (checkingDuration > 30000) {
+        logger.warn("Scheduler check timeout detected, forcing reset");
+        this.isChecking = false;
+      } else {
+        return;
+      }
     }
+    
     this.isChecking = true;
+    this.lastCheckStartTime = Date.now();
     const now = new Date();
     const tasks = this.storage.getEnabledTasks();
 
