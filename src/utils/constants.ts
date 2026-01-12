@@ -5,6 +5,10 @@
 export const PLUGIN_NAME = "plugin-sample-shehab-note";
 
 export const STORAGE_KEY = "recurring-tasks";
+export const STORAGE_ACTIVE_KEY = "recurring-tasks-active";
+export const STORAGE_ARCHIVE_KEY = "recurring-tasks-archive";
+export const STORAGE_LEGACY_KEY = "recurring-tasks";
+export const STORAGE_LEGACY_BACKUP_KEY = "recurring-tasks.json.bak";
 
 export const SETTINGS_KEY = "n8n-event-settings";
 

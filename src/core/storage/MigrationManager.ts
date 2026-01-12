@@ -44,13 +44,18 @@ export class MigrationManager {
   async migrate(storageKey: string): Promise<void> {
     try {
       const data = await this.plugin.loadData(storageKey);
-      if (!data || !Array.isArray(data)) {
+      if (!data) {
+        logger.info("No data to migrate");
+        return;
+      }
+
+      const tasks: Task[] = Array.isArray(data) ? data : Array.isArray(data.tasks) ? data.tasks : [];
+      if (tasks.length === 0) {
         logger.info("No data to migrate");
         return;
       }
 
       let migrated = false;
-      const tasks: Task[] = data;
 
       for (let i = 0; i < tasks.length; i++) {
         const task = tasks[i];
@@ -69,7 +74,8 @@ export class MigrationManager {
       }
 
       if (migrated) {
-        await this.plugin.saveData(storageKey, tasks);
+        const payload = Array.isArray(data) ? tasks : { ...data, tasks };
+        await this.plugin.saveData(storageKey, payload);
         logger.info(`Migration complete: ${tasks.length} tasks processed`);
       } else {
         logger.info("No migration needed - all tasks up to date");

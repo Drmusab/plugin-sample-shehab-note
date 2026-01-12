@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { TaskStorage } from "@/core/storage/TaskStorage";
 import { createTask } from "@/core/models/Task";
 import type { Frequency } from "@/core/models/Frequency";
+import { STORAGE_ACTIVE_KEY } from "@/utils/constants";
 
 // Mock Plugin
 const mockPlugin = {
@@ -121,7 +122,7 @@ describe("TaskStorage - Block Index", () => {
       // No linked block
 
       // Manually set storage data
-      mockPlugin.data["recurring-tasks"] = {
+      mockPlugin.data[STORAGE_ACTIVE_KEY] = {
         tasks: [task1, task2, task3],
       };
 

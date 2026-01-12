@@ -168,6 +168,9 @@ export class Scheduler {
     // Record completion (updates analytics)
     recordCompletion(task);
 
+    const completionSnapshot = JSON.parse(JSON.stringify(task));
+    await this.storage.archiveTask(completionSnapshot);
+
     // Calculate next occurrence
     const currentDue = new Date(task.dueAt);
     const nextDue = this.recurrenceEngine.calculateNext(

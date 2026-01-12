@@ -1,6 +1,17 @@
 import type { Task } from "@/core/models/Task";
 import type { Plugin } from "siyuan";
-import { STORAGE_KEY, BLOCK_ATTR_TASK_ID, BLOCK_ATTR_TASK_DUE, BLOCK_ATTR_TASK_ENABLED } from "@/utils/constants";
+import {
+  BLOCK_ATTR_TASK_ID,
+  BLOCK_ATTR_TASK_DUE,
+  BLOCK_ATTR_TASK_ENABLED,
+  STORAGE_ACTIVE_KEY,
+  STORAGE_ARCHIVE_KEY,
+  STORAGE_LEGACY_BACKUP_KEY,
+  STORAGE_LEGACY_KEY,
+} from "@/utils/constants";
+import { ActiveTaskStore } from "@/core/storage/ActiveTaskStore";
+import { ArchiveTaskStore, type ArchiveQuery } from "@/core/storage/ArchiveTaskStore";
+import * as logger from "@/utils/logger";
 
 /**
  * Helper to safely access SiYuan's setBlockAttrs function
@@ -13,35 +24,40 @@ function getSetBlockAttrs(): ((blockId: string, attrs: Record<string, string>) =
 }
 
 /**
- * TaskStorage manages task persistence using SiYuan storage API
- * Enhanced with block index for fast lookups and block attribute sync
+ * TaskStorage manages task persistence using SiYuan storage API.
+ * Active tasks are loaded on startup, while archived tasks are stored in
+ * chunked files and loaded on demand to keep startup fast.
  */
-export class TaskStorage {
+export interface TaskStorageProvider {
+  loadActive(): Promise<Map<string, Task>>;
+  saveActive(tasks: Map<string, Task>): Promise<void>;
+  archiveTask(task: Task): Promise<void>;
+  loadArchive(filter?: ArchiveQuery): Promise<Task[]>;
+}
+
+export class TaskStorage implements TaskStorageProvider {
   private plugin: Plugin;
-  private tasks: Map<string, Task>;
+  private activeTasks: Map<string, Task>;
   private blockIndex: Map<string, string> = new Map(); // blockId -> taskId
   private taskBlockIndex: Map<string, string> = new Map(); // taskId -> blockId
+  private activeStore: ActiveTaskStore;
+  private archiveStore: ArchiveTaskStore;
 
   constructor(plugin: Plugin) {
     this.plugin = plugin;
-    this.tasks = new Map();
+    this.activeTasks = new Map();
+    this.activeStore = new ActiveTaskStore(plugin);
+    this.archiveStore = new ArchiveTaskStore(plugin);
   }
 
   /**
    * Initialize storage by loading tasks from disk
    */
   async init(): Promise<void> {
-    try {
-      const data = await this.plugin.loadData(STORAGE_KEY);
-      if (data && Array.isArray(data.tasks)) {
-        this.tasks = new Map(data.tasks.map((task: Task) => [task.id, task]));
-        console.log(`Loaded ${this.tasks.size} tasks from storage`);
-        this.rebuildBlockIndex();
-      }
-    } catch (err) {
-      console.error("Failed to load tasks:", err);
-      this.tasks = new Map();
-    }
+    await this.migrateLegacyStorage();
+    this.activeTasks = await this.activeStore.loadActive();
+    logger.info(`Loaded ${this.activeTasks.size} active tasks from storage`);
+    this.rebuildBlockIndex();
   }
 
   /**
@@ -50,41 +66,34 @@ export class TaskStorage {
   private rebuildBlockIndex(): void {
     this.blockIndex.clear();
     this.taskBlockIndex.clear();
-    for (const task of this.tasks.values()) {
+    for (const task of this.activeTasks.values()) {
       if (task.linkedBlockId) {
         this.blockIndex.set(task.linkedBlockId, task.id);
         this.taskBlockIndex.set(task.id, task.linkedBlockId);
       }
     }
-    console.log(`Rebuilt block index with ${this.blockIndex.size} entries`);
+    logger.info(`Rebuilt block index with ${this.blockIndex.size} entries`);
   }
 
   /**
    * Save all tasks to disk
    */
   async save(): Promise<void> {
-    try {
-      const tasks = Array.from(this.tasks.values());
-      await this.plugin.saveData(STORAGE_KEY, { tasks });
-      console.log(`Saved ${tasks.length} tasks to storage`);
-    } catch (err) {
-      console.error("Failed to save tasks:", err);
-      throw err;
-    }
+    await this.activeStore.saveActive(this.activeTasks);
   }
 
   /**
    * Get all tasks
    */
   getAllTasks(): Task[] {
-    return Array.from(this.tasks.values());
+    return Array.from(this.activeTasks.values());
   }
 
   /**
    * Get a task by ID
    */
   getTask(id: string): Task | undefined {
-    return this.tasks.get(id);
+    return this.activeTasks.get(id);
   }
 
   /**
@@ -92,7 +101,7 @@ export class TaskStorage {
    */
   getTaskByBlockId(blockId: string): Task | undefined {
     const taskId = this.blockIndex.get(blockId);
-    return taskId ? this.tasks.get(taskId) : undefined;
+    return taskId ? this.activeTasks.get(taskId) : undefined;
   }
 
   /**
@@ -112,7 +121,7 @@ export class TaskStorage {
     }
 
     task.updatedAt = new Date().toISOString();
-    this.tasks.set(task.id, task);
+    this.activeTasks.set(task.id, task);
     await this.save();
     
     // Sync to block attributes for persistence
@@ -149,7 +158,7 @@ export class TaskStorage {
    * Delete a task
    */
   async deleteTask(id: string): Promise<void> {
-    const task = this.tasks.get(id);
+    const task = this.activeTasks.get(id);
     
     // Remove from block index if task has linkedBlockId
     if (task?.linkedBlockId) {
@@ -157,7 +166,7 @@ export class TaskStorage {
     }
     this.taskBlockIndex.delete(id);
     
-    this.tasks.delete(id);
+    this.activeTasks.delete(id);
     await this.save();
   }
 
@@ -196,7 +205,61 @@ export class TaskStorage {
    * Clear all tasks (for testing/reset)
    */
   async clearAll(): Promise<void> {
-    this.tasks.clear();
+    this.activeTasks.clear();
     await this.save();
+  }
+
+  async loadActive(): Promise<Map<string, Task>> {
+    return this.activeStore.loadActive();
+  }
+
+  async saveActive(tasks: Map<string, Task>): Promise<void> {
+    await this.activeStore.saveActive(tasks);
+  }
+
+  async archiveTask(task: Task): Promise<void> {
+    await this.archiveStore.archiveTask(task);
+  }
+
+  async loadArchive(filter?: ArchiveQuery): Promise<Task[]> {
+    return this.archiveStore.loadArchive(filter);
+  }
+
+  private async migrateLegacyStorage(): Promise<void> {
+    const existingActive = await this.plugin.loadData(STORAGE_ACTIVE_KEY);
+    if (existingActive && Array.isArray(existingActive.tasks)) {
+      return;
+    }
+
+    const legacyData = await this.plugin.loadData(STORAGE_LEGACY_KEY);
+    if (!legacyData) {
+      return;
+    }
+
+    const legacyTasks = Array.isArray(legacyData.tasks) ? legacyData.tasks : Array.isArray(legacyData) ? legacyData : [];
+    if (legacyTasks.length === 0) {
+      return;
+    }
+
+    await this.plugin.saveData(STORAGE_LEGACY_BACKUP_KEY, legacyData);
+    logger.info(`Created legacy backup at ${STORAGE_LEGACY_BACKUP_KEY}`);
+
+    const archivedTasks = legacyTasks.filter((task: Task) => !task.enabled && task.lastCompletedAt);
+    const activeTasks = legacyTasks.filter((task: Task) => !archivedTasks.includes(task));
+
+    const activeMap = new Map(activeTasks.map((task: Task) => [task.id, task]));
+    await this.activeStore.saveActive(activeMap);
+
+    if (archivedTasks.length > 0) {
+      await this.archiveStore.archiveTasks(archivedTasks);
+    }
+
+    logger.info("Legacy storage migration complete", {
+      activeCount: activeTasks.length,
+      archivedCount: archivedTasks.length,
+      legacyKey: STORAGE_LEGACY_KEY,
+      activeKey: STORAGE_ACTIVE_KEY,
+      archiveIndexKey: STORAGE_ARCHIVE_KEY,
+    });
   }
 }

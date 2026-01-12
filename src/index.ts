@@ -9,7 +9,7 @@ import { EventService } from "./services/EventService";
 import { registerCommands } from "./plugin/commands";
 import { registerBlockMenu } from "./plugin/menus";
 import { TopbarMenu } from "./plugin/topbar";
-import { DOCK_TYPE, NOTIFICATION_STATE_KEY, STORAGE_KEY } from "./utils/constants";
+import { DOCK_TYPE, NOTIFICATION_STATE_KEY, STORAGE_ACTIVE_KEY } from "./utils/constants";
 import * as logger from "./utils/logger";
 import "./index.scss";
 
@@ -31,7 +31,7 @@ export default class RecurringTasksPlugin extends Plugin {
 
     // Run migrations
     try {
-      await this.migrationManager.migrate(STORAGE_KEY);
+      await this.migrationManager.migrate(STORAGE_ACTIVE_KEY);
     } catch (err) {
       logger.error("Migration failed, continuing with existing data", err);
     }
