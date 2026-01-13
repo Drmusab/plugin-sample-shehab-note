@@ -1,8 +1,10 @@
 <script lang="ts">
   import type { Task } from "@/core/models/Task";
   import type { Frequency, FrequencyType } from "@/core/models/Frequency";
+  import { RecurrenceEngine } from "@/core/engine/RecurrenceEngine";
   import { createTask } from "@/core/models/Task";
   import { WEEKDAY_NAMES } from "@/utils/constants";
+  import { formatDateTime } from "@/utils/date";
   import { toast } from "@/utils/notifications";
 
   interface Props {
@@ -15,6 +17,7 @@
 
   // Form state - initialize from task prop
   const isEditing = $derived(!!task);
+  const recurrenceEngine = new RecurrenceEngine();
   
   let name = $state("");
   let dueAt = $state("");
@@ -55,6 +58,58 @@
   const hasErrors = $derived(
     !!(nameError || dueAtError || weekdaysError || dayOfMonthError)
   );
+
+  function buildFrequency(): Frequency {
+    if (frequencyType === "weekly") {
+      return {
+        type: "weekly",
+        interval,
+        time,
+        weekdays,
+      };
+    }
+    if (frequencyType === "monthly") {
+      return {
+        type: "monthly",
+        interval,
+        time,
+        dayOfMonth,
+      };
+    }
+    return {
+      type: "daily",
+      interval,
+      time,
+    };
+  }
+
+  const previewMessage = $derived(() => {
+    if (!dueAt || Number.isNaN(new Date(dueAt).getTime())) {
+      return "Set a valid due date to preview upcoming occurrences.";
+    }
+    if (frequencyType === "weekly" && weekdays.length === 0) {
+      return "Select at least one weekday to preview upcoming occurrences.";
+    }
+    if (frequencyType === "monthly" && (dayOfMonth < 1 || dayOfMonth > 31)) {
+      return "Choose a valid day of month to preview upcoming occurrences.";
+    }
+    return "";
+  });
+
+  const previewOccurrences = $derived(() => {
+    if (previewMessage) {
+      return [];
+    }
+    const start = new Date(dueAt);
+    const frequency = buildFrequency();
+    const occurrences: Date[] = [];
+    let current = new Date(start);
+    for (let i = 0; i < 3; i += 1) {
+      occurrences.push(new Date(current));
+      current = recurrenceEngine.calculateNext(current, frequency);
+    }
+    return occurrences;
+  });
 
   // Initialize form from task
   $effect(() => {
@@ -116,28 +171,7 @@
       return;
     }
 
-    let frequency: Frequency;
-    if (frequencyType === "weekly") {
-      frequency = {
-        type: "weekly",
-        interval,
-        time,
-        weekdays,
-      };
-    } else if (frequencyType === "monthly") {
-      frequency = {
-        type: "monthly",
-        interval,
-        time,
-        dayOfMonth,
-      };
-    } else {
-      frequency = {
-        type: "daily",
-        interval,
-        time,
-      };
-    }
+    const frequency = buildFrequency();
 
     const taskData: Task = task
       ? {
@@ -301,6 +335,19 @@
     </div>
   {/if}
 
+  <div class="task-form__field task-form__field--preview">
+    <div class="task-form__label">Next 3 occurrences</div>
+    {#if previewMessage}
+      <p class="task-form__preview-message">{previewMessage}</p>
+    {:else}
+      <ul class="task-form__preview-list">
+        {#each previewOccurrences as occurrence}
+          <li>{formatDateTime(occurrence)}</li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
+
   <div class="task-form__field">
     <label class="task-form__checkbox">
       <input type="checkbox" bind:checked={enabled} />
@@ -409,6 +456,25 @@
   .task-form__textarea {
     resize: vertical;
     font-family: inherit;
+  }
+
+  .task-form__field--preview {
+    background: var(--b3-theme-surface-lighter);
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .task-form__preview-message {
+    margin: 0;
+    font-size: 13px;
+    color: var(--b3-theme-on-surface-light);
+  }
+
+  .task-form__preview-list {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--b3-theme-on-surface);
+    font-size: 13px;
   }
 
   .task-form__checkbox {

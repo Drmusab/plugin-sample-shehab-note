@@ -18,6 +18,7 @@
 
   let confirmingDelete: Task | null = $state(null);
   let confirmingBulkDelete = $state(false);
+  let searchInput = $state("");
   let searchQuery = $state("");
   let selectedTaskIds = $state<Set<string>>(new Set());
   let focusedRowIndex = $state(0);
@@ -76,6 +77,16 @@
     if (focusedRowIndex >= filteredTasks.length) {
       focusedRowIndex = Math.max(0, filteredTasks.length - 1);
     }
+  });
+
+  $effect(() => {
+    const timeoutId = window.setTimeout(() => {
+      searchQuery = searchInput;
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   });
 
   function requestDelete(task: Task) {
@@ -179,7 +190,7 @@
           type="search"
           placeholder="Search tasks"
           aria-label="Search tasks"
-          bind:value={searchQuery}
+          bind:value={searchInput}
           disabled={sortedTasks.length === 0}
         />
       </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Task } from "@/core/models/Task";
+  import type { TimezoneHandler } from "@/core/engine/TimezoneHandler";
   import TaskCard from "../cards/TaskCard.svelte";
 
   interface Props {
@@ -8,7 +9,7 @@
     onDelay: (task: Task) => void;
     onSkip: (task: Task) => void;
     onEdit?: (task: Task) => void;
-    timezoneHandler?: any;
+    timezoneHandler?: TimezoneHandler;
   }
 
   let { tasks, onDone, onDelay, onSkip, onEdit, timezoneHandler }: Props = $props();
