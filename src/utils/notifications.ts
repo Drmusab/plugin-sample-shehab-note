@@ -115,7 +115,7 @@ export const toast = {
 /**
  * Confirm dialog replacement
  */
-export function confirm(message: string, title = "Confirm"): Promise<boolean> {
+export function confirmDialog(message: string, title = "Confirm"): Promise<boolean> {
   return new Promise((resolve) => {
     siyuanConfirm(
       title,

@@ -134,9 +134,9 @@ export class EventService {
     }
 
     this.flushQueue();
-    this.flushIntervalId = setInterval(() => {
+    this.flushIntervalId = window.setInterval(() => {
       this.flushQueue();
-    }, EVENT_QUEUE_INTERVAL_MS) as unknown as number;
+    }, EVENT_QUEUE_INTERVAL_MS);
   }
 
   /**
@@ -144,7 +144,7 @@ export class EventService {
    */
   stopQueueWorker(): void {
     if (this.flushIntervalId !== null) {
-      clearInterval(this.flushIntervalId);
+      window.clearInterval(this.flushIntervalId);
       this.flushIntervalId = null;
     }
   }
