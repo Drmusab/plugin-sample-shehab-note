@@ -20,6 +20,7 @@
 
   let { storage, onClose, prefill }: Props = $props();
 
+  // Initialize with prefill value - it's used once at component creation
   let name = $state(prefill?.suggestedName ?? "");
   let dueAt = $state(new Date().toISOString().slice(0, 16));
   let touched = $state({ name: false, dueAt: false });
@@ -91,10 +92,10 @@
   }
 </script>
 
-<div class="quick-add-overlay" onkeydown={handleKeydown}>
-  <div class="quick-add-card" role="dialog" aria-modal="true">
+<div class="quick-add-overlay" onkeydown={handleKeydown} role="dialog" aria-modal="true" aria-labelledby="quick-add-title">
+  <div class="quick-add-card">
     <div class="quick-add-card__header">
-      <h2>Quick Add</h2>
+      <h2 id="quick-add-title">Quick Add</h2>
       <button class="quick-add-card__close" type="button" onclick={onClose} aria-label="Close">
         ✕
       </button>

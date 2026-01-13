@@ -65,7 +65,7 @@
   let showSnoozeMenu = $state(false);
   let firstSnoozeOption: HTMLButtonElement | null = $state(null);
   let snoozeMenuIndex = $state(-1);
-  let snoozeOptionRefs: HTMLButtonElement[] = [];
+  let snoozeOptionRefs = $state<HTMLButtonElement[]>([]);
   let showBlockPreview = $state(false);
   let blockPreview = $state<string | null>(null);
   let blockPreviewLoading = $state(false);
@@ -188,7 +188,8 @@
 <div
   class="task-card {statusClass}"
   style="--overdue-tint: {overdueTint}; --overdue-border: {overdueBorder};"
-  tabindex="0"
+  role="article"
+  aria-label="Task: {task.name}"
   onkeydown={(event) => {
     if (event.key === "Escape" && showSnoozeMenu) {
       showSnoozeMenu = false;
@@ -288,7 +289,7 @@
         {/each}
       </div>
       {#if showSnoozeMenu}
-        <div class="task-card__snooze-menu" onkeydown={handleSnoozeMenuKeydown} role="menu">
+        <div class="task-card__snooze-menu" onkeydown={handleSnoozeMenuKeydown} role="menu" tabindex="0">
           {#each SNOOZE_OPTIONS as option, index}
             <button
               class="task-card__snooze-option"

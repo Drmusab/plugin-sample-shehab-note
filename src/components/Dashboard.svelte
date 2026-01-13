@@ -28,8 +28,10 @@
 
   let { storage, scheduler, eventService }: Props = $props();
 
-  // Get timezone handler from scheduler
+  // Get timezone handler and recurrence engine from scheduler
+  // Access these in component setup - they're stable references
   const timezoneHandler = scheduler.getTimezoneHandler();
+  const recurrenceEngine = scheduler.getRecurrenceEngine();
 
   let activeTab = $state<"today" | "all" | "timeline" | "analytics">("today");
   let showTaskForm = $state(false);
@@ -42,8 +44,6 @@
    */
   let allTasks = $state<Task[]>([]);
   let todayTasks = $derived(getTodayAndOverdueTasks(allTasks));
-
-  const recurrenceEngine = scheduler.getRecurrenceEngine();
 
   function formatNextDueLabel(date: Date): string {
     const now = new Date();
