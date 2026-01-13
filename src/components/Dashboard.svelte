@@ -35,6 +35,7 @@
   let showTaskForm = $state(false);
   let showSettings = $state(false);
   let editingTask = $state<Task | undefined>(undefined);
+  const pendingCompletions = new Map<string, { timeoutId: number; snapshot: Task }>();
   /**
    * Dashboard task state (single UI source of truth).
    * Storage is only used for initial hydration or explicit reloads.
@@ -85,10 +86,19 @@
   });
   onDestroy(() => {
     window.removeEventListener("recurring-task-refresh", refreshHandler);
+    pendingCompletions.forEach(({ timeoutId }) => {
+      window.clearTimeout(timeoutId);
+    });
+    pendingCompletions.clear();
   });
 
   async function handleTaskDone(task: Task) {
-    const previousTasks = allTasks;
+    if (pendingCompletions.has(task.id)) {
+      toast.info(`Completion already pending for "${task.name}".`);
+      return;
+    }
+
+    const snapshot = JSON.parse(JSON.stringify(task)) as Task;
     const nextTasks = updateTaskById(allTasks, task.id, (current) => {
       const nextTask = { ...current };
       recordCompletion(nextTask);
@@ -101,11 +111,12 @@
     const updatedTask = nextTasks.find((item) => item.id === task.id);
     const nextDueLabel = updatedTask ? formatNextDueLabel(new Date(updatedTask.dueAt)) : "soon";
     const undoTimeout = window.setTimeout(async () => {
+      pendingCompletions.delete(task.id);
       try {
         await eventService.emitTaskEvent("task.completed", task);
         await scheduler.markTaskDone(task.id);
       } catch (err) {
-        allTasks = previousTasks;
+        allTasks = updateTaskById(allTasks, task.id, () => snapshot);
         toast.error("Failed to mark task as done: " + err);
         loadTasksFromStorage("external");
       }
@@ -113,9 +124,12 @@
 
     const undoCompletion = () => {
       window.clearTimeout(undoTimeout);
-      allTasks = previousTasks;
+      pendingCompletions.delete(task.id);
+      allTasks = updateTaskById(allTasks, task.id, () => snapshot);
       toast.info(`Undo: "${task.name}" restored`);
     };
+
+    pendingCompletions.set(task.id, { timeoutId: undoTimeout, snapshot });
 
     showToast({
       message: `Task "${task.name}" completed. Next: ${nextDueLabel}`,

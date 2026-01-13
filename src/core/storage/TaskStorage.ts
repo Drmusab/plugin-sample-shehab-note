@@ -125,11 +125,68 @@ export class TaskStorage implements TaskStorageProvider {
    */
   getTasksDueOn(date: Date): Task[] {
     const dateKey = date.toISOString().slice(0, 10);
+    return this.getTasksForDueKey(dateKey);
+  }
+
+  /**
+   * Get tasks due on or before a specific date using the due index.
+   * Uses lexicographic date keys (YYYY-MM-DD) for fast comparisons.
+   */
+  getTasksDueOnOrBefore(date: Date): Task[] {
+    const dateKey = date.toISOString().slice(0, 10);
+    const results: Task[] = [];
+
+    for (const [key] of this.dueIndex) {
+      if (key <= dateKey) {
+        results.push(...this.getTasksForDueKey(key));
+      }
+    }
+
+    return results;
+  }
+
+  private getTasksForDueKey(dateKey: string): Task[] {
     const ids = this.dueIndex.get(dateKey);
-    if (!ids) return [];
-    return Array.from(ids)
-      .map(id => this.activeTasks.get(id))
-      .filter((task): task is Task => task !== undefined && task.enabled);
+    if (!ids) {
+      return [];
+    }
+
+    const tasks: Task[] = [];
+    for (const id of ids) {
+      const task = this.activeTasks.get(id);
+      if (!task) {
+        this.removeStaleDueIndexEntry(dateKey, id, "missing task");
+        continue;
+      }
+
+      if (!task.enabled) {
+        this.removeStaleDueIndexEntry(dateKey, id, "task disabled");
+        continue;
+      }
+
+      if (task.dueAt.slice(0, 10) !== dateKey) {
+        this.removeStaleDueIndexEntry(dateKey, id, "date mismatch");
+        continue;
+      }
+
+      tasks.push(task);
+    }
+
+    return tasks;
+  }
+
+  private removeStaleDueIndexEntry(dateKey: string, taskId: string, reason: string): void {
+    const ids = this.dueIndex.get(dateKey);
+    if (!ids) {
+      return;
+    }
+
+    ids.delete(taskId);
+    if (ids.size === 0) {
+      this.dueIndex.delete(dateKey);
+    }
+
+    logger.warn("Removed stale due index entry", { taskId, dateKey, reason });
   }
 
   /**
@@ -176,9 +233,11 @@ export class TaskStorage implements TaskStorageProvider {
       this.taskBlockIndex.delete(task.id);
     }
 
-    // Remove from old due date index if the date changed
-    if (previousTask && previousTask.dueAt !== task.dueAt) {
-      this.removeFromDueIndex(previousTask);
+    // Remove from old due date index if the date changed or task is disabled
+    if (previousTask && previousTask.enabled) {
+      if (previousTask.dueAt !== task.dueAt || !task.enabled) {
+        this.removeFromDueIndex(previousTask);
+      }
     }
 
     // Add new block index entry if task has linkedBlockId

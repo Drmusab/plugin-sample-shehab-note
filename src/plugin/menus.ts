@@ -47,7 +47,7 @@ export function registerBlockMenu(plugin: Plugin): void {
     // Check if block already has a recurring task
     try {
       const manager = TaskManager.getInstance();
-      if (manager.isReady()) {
+      if (manager && manager.isReady()) {
         const storage = manager.getStorage();
         const existingTask = storage.getTaskByBlockId(blockId);
         

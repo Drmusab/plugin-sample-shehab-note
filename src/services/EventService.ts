@@ -18,6 +18,7 @@ import {
 
 const RETRY_BASE_DELAY_MS = 30 * 1000;
 const RETRY_MAX_DELAY_MS = 30 * 60 * 1000;
+const MAX_QUEUE_SIZE = 500;
 
 type Fetcher = typeof fetch;
 
@@ -100,6 +101,11 @@ export class EventService {
         this.queue = Array.isArray(data.queue) ? data.queue : [];
         const dedupe = Array.isArray(data.dedupeKeys) ? data.dedupeKeys : [];
         this.dedupeKeys = new Set(dedupe);
+        if (this.queue.length > MAX_QUEUE_SIZE) {
+          const dropped = this.queue.length - MAX_QUEUE_SIZE;
+          this.queue = this.queue.slice(-MAX_QUEUE_SIZE);
+          console.warn(`Event queue trimmed to ${MAX_QUEUE_SIZE} entries (dropped ${dropped}).`);
+        }
       }
     } catch (err) {
       console.error("Failed to load event queue:", err);
@@ -403,6 +409,13 @@ export class EventService {
 
   private enqueue(payload: TaskEventPayload): void {
     const now = Date.now();
+    if (this.queue.length >= MAX_QUEUE_SIZE) {
+      const overflow = this.queue.length - MAX_QUEUE_SIZE + 1;
+      this.queue.splice(0, overflow);
+      console.warn(
+        `Event queue capped at ${MAX_QUEUE_SIZE}. Dropped ${overflow} oldest entr${overflow === 1 ? "y" : "ies"}.`
+      );
+    }
     this.queue.push({
       id: `${payload.delivery.dedupeKey}:${payload.delivery.attempt}`,
       payload,

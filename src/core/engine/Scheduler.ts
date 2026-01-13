@@ -141,7 +141,8 @@ export class Scheduler {
     this.isChecking = true;
     this.lastCheckStartTime = Date.now();
     const now = new Date();
-    const tasks = this.storage.getEnabledTasks();
+    // Use the due index for fast lookup of due + overdue tasks.
+    const tasks = this.storage.getTasksDueOnOrBefore(now);
 
     try {
       for (const task of tasks) {

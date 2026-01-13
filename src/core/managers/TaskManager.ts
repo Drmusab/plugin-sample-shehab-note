@@ -2,6 +2,7 @@ import type { Plugin } from "siyuan";
 import { TaskStorage } from "@/core/storage/TaskStorage";
 import { Scheduler } from "@/core/engine/Scheduler";
 import { EventService } from "@/services/EventService";
+import { SCHEDULER_INTERVAL_MS } from "@/utils/constants";
 import * as logger from "@/utils/logger";
 
 /**
@@ -25,10 +26,10 @@ export class TaskManager {
   /**
    * Get the singleton instance
    */
-  public static getInstance(plugin?: Plugin): TaskManager {
+  public static getInstance(plugin?: Plugin): TaskManager | null {
     if (!TaskManager.instance) {
       if (!plugin) {
-        throw new Error('TaskManager requires plugin instance for initialization');
+        return null;
       }
       TaskManager.instance = new TaskManager(plugin);
     }
@@ -55,7 +56,7 @@ export class TaskManager {
     await this.eventService.init();
 
     // Initialize scheduler
-    this.scheduler = new Scheduler(this.storage);
+    this.scheduler = new Scheduler(this.storage, SCHEDULER_INTERVAL_MS, this.plugin);
     this.eventService.bindScheduler(this.scheduler);
 
     this.isInitialized = true;
@@ -100,6 +101,10 @@ export class TaskManager {
 
     if (this.eventService) {
       await this.eventService.shutdown();
+    }
+
+    if (this.storage) {
+      await this.storage.flush();
     }
 
     this.isInitialized = false;

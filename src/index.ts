@@ -2,19 +2,21 @@ import { Plugin } from "siyuan";
 import { mount, unmount } from "svelte";
 import Dashboard from "./components/Dashboard.svelte";
 import QuickAddOverlay from "./components/cards/QuickAddOverlay.svelte";
+import type { Scheduler } from "./core/engine/Scheduler";
 import { TaskStorage } from "./core/storage/TaskStorage";
-import { Scheduler } from "./core/engine/Scheduler";
 import { MigrationManager } from "./core/storage/MigrationManager";
-import { EventService } from "./services/EventService";
+import { TaskManager } from "./core/managers/TaskManager";
+import type { EventService } from "./services/EventService";
 import { registerCommands } from "./plugin/commands";
 import { registerBlockMenu } from "./plugin/menus";
 import { TopbarMenu } from "./plugin/topbar";
-import { DOCK_TYPE, SCHEDULER_INTERVAL_MS, STORAGE_ACTIVE_KEY } from "./utils/constants";
+import { DOCK_TYPE, STORAGE_ACTIVE_KEY } from "./utils/constants";
 import * as logger from "./utils/logger";
-import { toast } from "./utils/notifications";
+import { showToast, toast } from "./utils/notifications";
 import "./index.scss";
 
 export default class RecurringTasksPlugin extends Plugin {
+  private taskManager!: TaskManager;
   private storage!: TaskStorage;
   private scheduler!: Scheduler;
   private eventService!: EventService;
@@ -24,6 +26,7 @@ export default class RecurringTasksPlugin extends Plugin {
   private dockEl!: HTMLElement;
   private quickAddComponent: ReturnType<typeof mount> | null = null;
   private quickAddContainer: HTMLElement | null = null;
+  private pendingCompletionTimeouts: Map<string, number> = new Map();
 
   async onload() {
     logger.info("Loading Recurring Tasks Plugin");
@@ -38,24 +41,24 @@ export default class RecurringTasksPlugin extends Plugin {
       logger.error("Migration failed, continuing with existing data", err);
     }
 
-    // Initialize storage
-    this.storage = new TaskStorage(this);
-    await this.storage.init();
+    // Initialize task manager (storage + scheduler + events)
+    const manager = TaskManager.getInstance(this);
+    if (!manager) {
+      throw new Error("TaskManager failed to initialize");
+    }
 
-    // Initialize event service
-    this.eventService = new EventService(this);
-    await this.eventService.init();
+    this.taskManager = manager;
+    await this.taskManager.initialize();
 
-    // Initialize scheduler (time-only) and bind its events to the orchestrator.
-    this.scheduler = new Scheduler(this.storage, SCHEDULER_INTERVAL_MS, this);
-    this.eventService.bindScheduler(this.scheduler);
-    this.scheduler.start();
+    this.storage = this.taskManager.getStorage();
+    this.scheduler = this.taskManager.getScheduler();
+    this.eventService = this.taskManager.getEventService();
 
-    // Recover missed tasks from previous session
+    // Start scheduler and recover missed tasks
     try {
-      await this.scheduler.recoverMissedTasks();
+      await this.taskManager.start();
     } catch (err) {
-      logger.error("Failed to recover missed tasks", err);
+      logger.error("Failed to start TaskManager", err);
     }
 
     // Register slash commands and hotkeys
@@ -96,12 +99,14 @@ export default class RecurringTasksPlugin extends Plugin {
   async onunload() {
     logger.info("Unloading Recurring Tasks Plugin");
     
-    // Stop scheduler
-    this.scheduler.stop();
-    await this.eventService.shutdown();
+    this.pendingCompletionTimeouts.forEach((timeoutId) => {
+      window.clearTimeout(timeoutId);
+    });
+    this.pendingCompletionTimeouts.clear();
 
-    // Flush pending task writes
-    await this.storage.flush();
+    if (this.taskManager) {
+      await this.taskManager.destroy();
+    }
 
     // Destroy topbar menu
     if (this.topbarMenu) {
@@ -197,15 +202,47 @@ export default class RecurringTasksPlugin extends Plugin {
 
       const task = this.storage.getTask(taskId);
       if (task) {
-        await this.eventService.handleTaskCompleted(task);
-        await this.scheduler.markTaskDone(taskId);
-        
-        // Update topbar badge
-        if (this.topbarMenu) {
-          this.topbarMenu.update();
+        if (this.pendingCompletionTimeouts.has(taskId)) {
+          toast.info(`Completion already pending for "${task.name}".`);
+          return;
         }
-        
-        logger.info(`Task completed: ${task.name}`);
+
+        const timeoutId = window.setTimeout(async () => {
+          this.pendingCompletionTimeouts.delete(taskId);
+          try {
+            await this.eventService.handleTaskCompleted(task);
+            await this.scheduler.markTaskDone(taskId);
+
+            // Update topbar badge
+            if (this.topbarMenu) {
+              this.topbarMenu.update();
+            }
+
+            logger.info(`Task completed: ${task.name}`);
+          } catch (err) {
+            logger.error("Failed to finalize task completion", err);
+            toast.error("Failed to complete task.");
+          }
+        }, 5000);
+
+        this.pendingCompletionTimeouts.set(taskId, timeoutId);
+
+        const undoCompletion = () => {
+          const pending = this.pendingCompletionTimeouts.get(taskId);
+          if (pending) {
+            window.clearTimeout(pending);
+            this.pendingCompletionTimeouts.delete(taskId);
+            toast.info(`Undo: "${task.name}" restored`);
+          }
+        };
+
+        showToast({
+          message: `Task "${task.name}" completed.`,
+          type: "success",
+          duration: 5000,
+          actionLabel: "Undo",
+          onAction: undoCompletion,
+        });
       }
     } catch (err) {
       logger.error("Failed to complete task", err);

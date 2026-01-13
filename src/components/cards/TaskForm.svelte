@@ -184,6 +184,7 @@
   }
 
   const weekdayNames = WEEKDAY_NAMES;
+  const weekdayLabels = ["M", "T", "W", "T", "F", "S", "S"];
 </script>
 
 <div class="task-form">
@@ -266,12 +267,14 @@
           <button
             class="task-form__weekday {weekdays.includes(index)
               ? 'task-form__weekday--active'
-              : ''}"
+              : 'task-form__weekday--inactive'}"
             onclick={() => toggleWeekday(index)}
             onblur={() => (touched.weekdays = true)}
             type="button"
+            aria-pressed={weekdays.includes(index)}
+            aria-label={day}
           >
-            {day.slice(0, 3)}
+            {weekdayLabels[index]}
           </button>
         {/each}
       </div>
@@ -437,12 +440,19 @@
     color: var(--b3-theme-on-background);
     cursor: pointer;
     transition: all 0.2s;
+    min-width: 36px;
+    text-align: center;
   }
 
   .task-form__weekday--active {
     background: var(--b3-theme-primary);
     color: white;
     border-color: var(--b3-theme-primary);
+  }
+
+  .task-form__weekday--inactive {
+    background: var(--b3-theme-surface-lighter);
+    color: var(--b3-theme-on-surface);
   }
 
   .task-form__section {
