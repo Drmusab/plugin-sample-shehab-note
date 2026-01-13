@@ -5,6 +5,29 @@ import { MAX_RECOVERY_ITERATIONS } from "@/utils/constants";
 
 describe("RecurrenceEngine - Edge Cases", () => {
   const engine = new RecurrenceEngine();
+  const findDstTransitions = (year: number) => {
+    const transitions: Array<{ date: Date; offsetChange: number }> = [];
+    let previousOffset = new Date(year, 0, 1, 12, 0, 0).getTimezoneOffset();
+
+    for (let month = 0; month < 12; month++) {
+      for (let day = 1; day <= 31; day++) {
+        const current = new Date(year, month, day, 12, 0, 0);
+        if (current.getMonth() !== month) {
+          break;
+        }
+        const currentOffset = current.getTimezoneOffset();
+        if (currentOffset !== previousOffset) {
+          transitions.push({
+            date: new Date(current.getFullYear(), current.getMonth(), current.getDate()),
+            offsetChange: currentOffset - previousOffset,
+          });
+          previousOffset = currentOffset;
+        }
+      }
+    }
+
+    return transitions;
+  };
 
   describe("getMissedOccurrences", () => {
     it("should return all missed occurrences between two dates", () => {
@@ -337,6 +360,50 @@ describe("RecurrenceEngine - Edge Cases", () => {
       expect(next.getHours()).toBe(9);
       expect(next.getMinutes()).toBe(0);
       expect(next.getDate()).toBe(15);
+    });
+  });
+
+  describe("DST handling", () => {
+    it("shifts forward when requested time is skipped by DST", () => {
+      const transitions = findDstTransitions(2024);
+      const springForward = transitions.find((transition) => transition.offsetChange < 0);
+      if (!springForward) {
+        return;
+      }
+
+      const currentDue = new Date(springForward.date);
+      currentDue.setDate(currentDue.getDate() - 1);
+      currentDue.setHours(9, 0, 0, 0);
+
+      const next = engine.calculateNext(currentDue, {
+        type: "daily",
+        interval: 1,
+        time: "02:30",
+      });
+
+      expect(next.getDate()).toBe(springForward.date.getDate());
+      expect(next.getHours() === 2 && next.getMinutes() === 30).toBe(false);
+    });
+
+    it("preserves time when DST falls back", () => {
+      const transitions = findDstTransitions(2024);
+      const fallBack = transitions.find((transition) => transition.offsetChange > 0);
+      if (!fallBack) {
+        return;
+      }
+
+      const currentDue = new Date(fallBack.date);
+      currentDue.setDate(currentDue.getDate() - 1);
+      currentDue.setHours(9, 0, 0, 0);
+
+      const next = engine.calculateNext(currentDue, {
+        type: "daily",
+        interval: 1,
+        time: "01:30",
+      });
+
+      expect(next.getHours()).toBe(1);
+      expect(next.getMinutes()).toBe(30);
     });
   });
 });

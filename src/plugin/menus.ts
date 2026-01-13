@@ -6,6 +6,7 @@
 import type { Plugin } from "siyuan";
 import { TaskManager } from "@/core/managers/TaskManager";
 import * as logger from "@/utils/logger";
+import { snoozeTask, snoozeToTomorrow } from "@/utils/snooze";
 
 /**
  * Register block context menu items
@@ -151,30 +152,4 @@ export function createTaskFromBlock(blockId: string, blockContent: string): void
   window.dispatchEvent(event);
   
   logger.info(`Creating task from block: ${blockId}`);
-}
-
-/**
- * Snooze a task by specified minutes
- */
-function snoozeTask(taskId: string, minutes: number): void {
-  window.dispatchEvent(new CustomEvent('task-snooze', {
-    detail: { taskId, minutes }
-  }));
-  logger.info(`Snoozing task ${taskId} for ${minutes} minutes`);
-}
-
-/**
- * Snooze a task to tomorrow
- */
-function snoozeToTomorrow(taskId: string): void {
-  // Calculate minutes until tomorrow at the same time
-  const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const minutesUntilTomorrow = Math.floor((tomorrow.getTime() - now.getTime()) / (60 * 1000));
-  
-  window.dispatchEvent(new CustomEvent('task-snooze', {
-    detail: { taskId, minutes: minutesUntilTomorrow }
-  }));
-  logger.info(`Snoozing task ${taskId} to tomorrow`);
 }

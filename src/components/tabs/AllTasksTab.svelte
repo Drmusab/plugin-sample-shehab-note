@@ -14,12 +14,32 @@
   let { tasks, onEdit, onDelete, onToggleEnabled, onCreate }: Props = $props();
 
   let confirmingDelete: Task | null = $state(null);
+  let searchQuery = $state("");
 
   const sortedTasks = $derived(
     [...tasks].sort(
       (a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()
     )
   );
+  const filteredTasks = $derived(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return sortedTasks;
+    }
+    return sortedTasks.filter((task) => {
+      const haystack = [
+        task.name,
+        task.description,
+        task.category,
+        task.linkedBlockContent,
+        task.tags?.join(" "),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  });
 
   function requestDelete(task: Task) {
     confirmingDelete = task;
@@ -55,9 +75,22 @@
 <div class="all-tasks-tab">
   <div class="all-tasks-tab__header">
     <h2 class="all-tasks-tab__title">All Recurring Tasks</h2>
-    <button class="all-tasks-tab__create-btn" onclick={onCreate}>
-      + Create New Task
-    </button>
+    <div class="all-tasks-tab__actions">
+      <div class="all-tasks-tab__search">
+        <span class="all-tasks-tab__search-icon">🔍</span>
+        <input
+          class="all-tasks-tab__search-input"
+          type="search"
+          placeholder="Search tasks"
+          aria-label="Search tasks"
+          bind:value={searchQuery}
+          disabled={sortedTasks.length === 0}
+        />
+      </div>
+      <button class="all-tasks-tab__create-btn" onclick={onCreate}>
+        + Create New Task
+      </button>
+    </div>
   </div>
 
   <div class="all-tasks-tab__content">
@@ -70,54 +103,63 @@
       </div>
     {:else}
       <div class="all-tasks-tab__table-wrapper">
-        <table class="all-tasks-tab__table">
-          <thead>
-            <tr>
-              <th>Task Name</th>
-              <th>Next Due</th>
-              <th>Frequency</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each sortedTasks as task (task.id)}
-              <tr class={task.enabled ? "" : "disabled"}>
-                <td class="task-name">{task.name}</td>
-                <td>{formatDateTime(new Date(task.dueAt))}</td>
-                <td>{getFrequencyLabel(task)}</td>
-                <td>
-                  <label class="toggle-switch">
-                    <input
-                      type="checkbox"
-                      checked={task.enabled}
-                      onchange={() => onToggleEnabled(task)}
-                    />
-                    <span class="toggle-slider"></span>
-                  </label>
-                </td>
-                <td>
-                  <div class="task-actions">
-                    <button
-                      class="task-action-btn task-action-btn--edit"
-                      onclick={() => onEdit(task)}
-                      title="Edit"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      class="task-action-btn task-action-btn--delete"
-                      onclick={() => requestDelete(task)}
-                      title="Delete"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </td>
+        {#if filteredTasks.length === 0}
+          <div class="all-tasks-tab__empty">
+            <p>No tasks match "{searchQuery.trim()}".</p>
+            <p class="all-tasks-tab__empty-subtitle">
+              Try a different search term.
+            </p>
+          </div>
+        {:else}
+          <table class="all-tasks-tab__table">
+            <thead>
+              <tr>
+                <th>Task Name</th>
+                <th>Next Due</th>
+                <th>Frequency</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
-            {/each}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {#each filteredTasks as task (task.id)}
+                <tr class={task.enabled ? "" : "disabled"}>
+                  <td class="task-name">{task.name}</td>
+                  <td>{formatDateTime(new Date(task.dueAt))}</td>
+                  <td>{getFrequencyLabel(task)}</td>
+                  <td>
+                    <label class="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={task.enabled}
+                        onchange={() => onToggleEnabled(task)}
+                      />
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </td>
+                  <td>
+                    <div class="task-actions">
+                      <button
+                        class="task-action-btn task-action-btn--edit"
+                        onclick={() => onEdit(task)}
+                        title="Edit"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        class="task-action-btn task-action-btn--delete"
+                        onclick={() => requestDelete(task)}
+                        title="Delete"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {/if}
       </div>
     {/if}
   </div>
@@ -146,6 +188,8 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
+    gap: 16px;
+    flex-wrap: wrap;
   }
 
   .all-tasks-tab__title {
@@ -153,6 +197,47 @@
     font-size: 20px;
     font-weight: 600;
     color: var(--b3-theme-on-surface);
+  }
+
+  .all-tasks-tab__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .all-tasks-tab__search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--b3-theme-surface-lighter);
+    border: 1px solid var(--b3-border-color);
+    border-radius: 8px;
+    min-width: 220px;
+  }
+
+  .all-tasks-tab__search-icon {
+    font-size: 14px;
+    opacity: 0.7;
+  }
+
+  .all-tasks-tab__search-input {
+    border: none;
+    background: transparent;
+    outline: none;
+    color: var(--b3-theme-on-surface);
+    font-size: 14px;
+    width: 100%;
+  }
+
+  .all-tasks-tab__search-input::placeholder {
+    color: var(--b3-theme-on-surface-light);
+  }
+
+  .all-tasks-tab__search-input:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
   }
 
   .all-tasks-tab__create-btn {

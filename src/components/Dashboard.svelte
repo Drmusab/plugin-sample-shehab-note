@@ -146,7 +146,7 @@
 
     try {
       await eventService.emitTaskEvent("task.snoozed", task);
-      await scheduler.delayTaskToTomorrow(task.id);
+      await scheduler.delayToTomorrow(task.id);
     } catch (err) {
       allTasks = previousTasks;
       toast.error("Failed to delay task: " + err);

@@ -3,15 +3,16 @@ import type { Task } from "@/core/models/Task";
 import { STORAGE_ACTIVE_KEY } from "@/utils/constants";
 import * as logger from "@/utils/logger";
 import { TaskState, type TaskStateWriter } from "@/core/storage/TaskPersistenceController";
-import { promises as fs } from "fs";
 import path from "path";
 import { type SiYuanEnvironmentAPI, reportSiYuanApiIssue } from "@/core/api/SiYuanApiAdapter";
 
 const TEMP_SUFFIX = ".tmp";
+type FsPromises = typeof import("fs").promises;
 
 export class ActiveTaskStore implements TaskStateWriter {
   private plugin: Plugin;
   private apiAdapter: SiYuanEnvironmentAPI;
+  private fsPromises?: FsPromises | null;
 
   constructor(plugin: Plugin, apiAdapter: SiYuanEnvironmentAPI) {
     this.plugin = plugin;
@@ -45,6 +46,12 @@ export class ActiveTaskStore implements TaskStateWriter {
   }
 
   private async saveActiveAtomic(state: TaskState): Promise<void> {
+    const fs = await this.getFsPromises();
+    if (!fs) {
+      await this.plugin.saveData(STORAGE_ACTIVE_KEY, state);
+      return;
+    }
+
     const filePath = this.resolveStoragePath(STORAGE_ACTIVE_KEY);
     if (!filePath) {
       await this.plugin.saveData(STORAGE_ACTIVE_KEY, state);
@@ -69,6 +76,22 @@ export class ActiveTaskStore implements TaskStateWriter {
     } catch (err) {
       await fs.rm(filePath, { force: true });
       await fs.rename(tempPath, filePath);
+    }
+  }
+
+  private async getFsPromises(): Promise<FsPromises | null> {
+    if (this.fsPromises !== undefined) {
+      return this.fsPromises;
+    }
+
+    try {
+      const module = await import("fs");
+      this.fsPromises = module.promises;
+      return this.fsPromises;
+    } catch (err) {
+      logger.warn("Node.js fs unavailable; falling back to plugin storage without atomic writes.", err);
+      this.fsPromises = null;
+      return null;
     }
   }
 
