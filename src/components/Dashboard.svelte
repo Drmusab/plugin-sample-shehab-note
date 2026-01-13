@@ -1,8 +1,7 @@
 <script lang="ts">
   import type { Task } from "@/core/models/Task";
-  import { recordCompletion, recordMiss } from "@/core/models/Task";
-  import type { TaskStorage } from "@/core/storage/TaskStorage";
-  import type { Scheduler } from "@/core/engine/Scheduler";
+  import type { TaskService } from "@/core/TaskService";
+  import type { RecurringTaskService } from "@/core/RecurringTaskService";
   import type { EventService } from "@/services/EventService";
   import { toast } from "@/utils/notifications";
   import { isValidFrequency } from "@/core/models/Frequency";
@@ -20,15 +19,15 @@
   import Settings from "./settings/Settings.svelte";
 
   interface Props {
-    storage: TaskStorage;
-    scheduler: Scheduler;
+    taskService: TaskService;
+    recurringTaskService: RecurringTaskService;
     eventService: EventService;
   }
 
-  let { storage, scheduler, eventService }: Props = $props();
+  let { taskService, recurringTaskService, eventService }: Props = $props();
 
-  // Get timezone handler from scheduler
-  const timezoneHandler = scheduler.getTimezoneHandler();
+  // Get timezone handler from recurring task service
+  const timezoneHandler = recurringTaskService.getTimezoneHandler();
 
   let activeTab = $state<"today" | "all" | "timeline" | "analytics">("today");
   let showTaskForm = $state(false);
@@ -41,12 +40,12 @@
   let allTasks = $state<Task[]>([]);
   let todayTasks = $derived(getTodayAndOverdueTasks(allTasks));
 
-  const recurrenceEngine = scheduler.getRecurrenceEngine();
+  const recurrenceEngine = recurringTaskService.getRecurrenceEngine();
 
   // Refresh tasks from storage (initial load / explicit reloads only)
   function loadTasksFromStorage(reason: "initial" | "reload" | "external" = "initial") {
     // Shallow copy keeps UI state decoupled from storage while avoiding deep clones.
-    allTasks = storage.getAllTasks().map((task) => ({ ...task }));
+    allTasks = taskService.loadTasks();
     if (reason !== "initial") {
       toast.info("Task list reloaded");
     }
@@ -56,20 +55,15 @@
   loadTasksFromStorage();
 
   async function handleTaskDone(task: Task) {
-    const nextTasks = updateTaskById(allTasks, task.id, (current) => {
-      const nextTask = { ...current };
-      recordCompletion(nextTask);
-      const nextDue = recurrenceEngine.calculateNext(new Date(nextTask.dueAt), nextTask.frequency);
-      nextTask.dueAt = nextDue.toISOString();
-      return nextTask;
-    });
+    const nextTasks = updateTaskById(allTasks, task.id, (current) =>
+      recurringTaskService.buildCompletionUpdate(current)
+    );
 
     allTasks = nextTasks;
     toast.success(`Task "${task.name}" completed and rescheduled`);
 
-    void eventService
-      .emitTaskEvent("task.completed", task)
-      .then(() => scheduler.markTaskDone(task.id))
+    void recurringTaskService
+      .completeTask(task)
       .catch((err) => {
         toast.error("Failed to mark task as done: " + err);
         loadTasksFromStorage("external");
@@ -77,23 +71,15 @@
   }
 
   async function handleTaskDelay(task: Task) {
-    const nextTasks = updateTaskById(allTasks, task.id, (current) => {
-      const nextTask = { ...current };
-      const currentDue = new Date(nextTask.dueAt);
-      const tomorrow = timezoneHandler.tomorrow();
-      tomorrow.setHours(currentDue.getHours(), currentDue.getMinutes(), 0, 0);
-      nextTask.dueAt = tomorrow.toISOString();
-      nextTask.snoozeCount = (nextTask.snoozeCount || 0) + 1;
-      nextTask.updatedAt = new Date().toISOString();
-      return nextTask;
-    });
+    const nextTasks = updateTaskById(allTasks, task.id, (current) =>
+      recurringTaskService.buildDelayToTomorrowUpdate(current)
+    );
 
     allTasks = nextTasks;
     toast.info(`Task "${task.name}" delayed to tomorrow`);
 
-    void eventService
-      .emitTaskEvent("task.snoozed", task)
-      .then(() => scheduler.delayTaskToTomorrow(task.id))
+    void recurringTaskService
+      .snoozeToTomorrow(task)
       .catch((err) => {
         toast.error("Failed to delay task: " + err);
         loadTasksFromStorage("external");
@@ -117,7 +103,7 @@
     editingTask = undefined;
     toast.success(`Task "${task.name}" saved successfully`);
 
-    void storage.saveTask(nextTask).catch((err) => {
+    void taskService.saveTask(nextTask).catch((err) => {
       toast.error("Failed to save task: " + err);
       loadTasksFromStorage("external");
     });
@@ -127,7 +113,7 @@
     allTasks = removeTask(allTasks, task.id);
     toast.success(`Task "${task.name}" deleted`);
 
-    void storage.deleteTask(task.id).catch((err) => {
+    void taskService.deleteTask(task.id).catch((err) => {
       toast.error("Failed to delete task: " + err);
       loadTasksFromStorage("external");
     });
@@ -141,7 +127,7 @@
     allTasks = nextTasks;
     toast.info(`Task ${nextEnabled ? "enabled" : "disabled"}`);
 
-    void storage.saveTask(nextTask).catch((err) => {
+    void taskService.saveTask(nextTask).catch((err) => {
       toast.error("Failed to update task: " + err);
       loadTasksFromStorage("external");
     });
@@ -171,20 +157,15 @@
   }
 
   async function handleTaskSkip(task: Task) {
-    const nextTasks = updateTaskById(allTasks, task.id, (current) => {
-      const nextTask = { ...current };
-      recordMiss(nextTask);
-      const nextDue = recurrenceEngine.calculateNext(new Date(nextTask.dueAt), nextTask.frequency);
-      nextTask.dueAt = nextDue.toISOString();
-      return nextTask;
-    });
+    const nextTasks = updateTaskById(allTasks, task.id, (current) =>
+      recurringTaskService.buildSkipUpdate(current)
+    );
 
     allTasks = nextTasks;
     toast.info(`Task "${task.name}" skipped to next occurrence`);
 
-    void eventService
-      .emitTaskEvent("task.skipped", task)
-      .then(() => scheduler.skipTaskOccurrence(task.id))
+    void recurringTaskService
+      .skipTask(task)
       .catch((err) => {
         toast.error("Failed to skip task: " + err);
         loadTasksFromStorage("external");
@@ -261,7 +242,7 @@
       {:else if activeTab === "timeline"}
         <TimelineTab
           tasks={allTasks}
-          recurrenceEngine={scheduler.getRecurrenceEngine()}
+          recurrenceEngine={recurrenceEngine}
         />
       {:else if activeTab === "analytics"}
         <AnalyticsTab tasks={allTasks} />

@@ -1,10 +1,12 @@
 import { Plugin } from "siyuan";
 import { mount, unmount } from "svelte";
 import Dashboard from "./components/Dashboard.svelte";
-import { TaskStorage } from "./core/storage/TaskStorage";
-import { Scheduler } from "./core/engine/Scheduler";
+import { taskManager } from "./core";
+import { eventBus } from "./core/EventBus";
+import type { PluginEvents, RecurringTaskCreatePayload } from "./core/EventBus";
+import { TaskService } from "./core/TaskService";
+import { RecurringTaskService } from "./core/RecurringTaskService";
 import { MigrationManager } from "./core/storage/MigrationManager";
-import { EventService } from "./services/EventService";
 import { registerCommands } from "./plugin/commands";
 import { registerBlockMenu } from "./plugin/menus";
 import { TopbarMenu } from "./plugin/topbar";
@@ -13,13 +15,13 @@ import * as logger from "./utils/logger";
 import "./index.scss";
 
 export default class RecurringTasksPlugin extends Plugin {
-  private storage!: TaskStorage;
-  private scheduler!: Scheduler;
-  private eventService!: EventService;
+  private taskService!: TaskService;
+  private recurringTaskService!: RecurringTaskService;
   private migrationManager!: MigrationManager;
   private topbarMenu!: TopbarMenu;
   private dashboardComponent: ReturnType<typeof mount> | null = null;
   private dockEl!: HTMLElement;
+  private eventUnsubscribers: Array<() => void> = [];
 
   async onload() {
     logger.info("Loading Recurring Tasks Plugin");
@@ -34,34 +36,24 @@ export default class RecurringTasksPlugin extends Plugin {
       logger.error("Migration failed, continuing with existing data", err);
     }
 
-    // Initialize storage
-    this.storage = new TaskStorage(this);
-    await this.storage.init();
+    taskManager.setPlugin(this);
+    await taskManager.initialize({ intervalMs: SCHEDULER_INTERVAL_MS });
+    await taskManager.start();
 
-    // Initialize event service
-    this.eventService = new EventService(this);
-    await this.eventService.init();
-
-    // Initialize scheduler (time-only) and bind its events to the orchestrator.
-    this.scheduler = new Scheduler(this.storage, SCHEDULER_INTERVAL_MS, this);
-    this.eventService.bindScheduler(this.scheduler);
-    this.scheduler.start();
-
-    // Recover missed tasks from previous session
-    try {
-      await this.scheduler.recoverMissedTasks();
-    } catch (err) {
-      logger.error("Failed to recover missed tasks", err);
-    }
+    this.taskService = new TaskService(taskManager.getStorage());
+    this.recurringTaskService = new RecurringTaskService(
+      taskManager.getScheduler(),
+      taskManager.getEventService()
+    );
 
     // Register slash commands and hotkeys
-    registerCommands(this, this.storage);
+    registerCommands(this);
 
     // Register block context menu
     registerBlockMenu(this);
 
     // Initialize topbar menu
-    this.topbarMenu = new TopbarMenu(this, this.storage);
+    this.topbarMenu = new TopbarMenu(this, this.taskService);
     this.topbarMenu.init();
 
     // Add dock panel
@@ -92,12 +84,9 @@ export default class RecurringTasksPlugin extends Plugin {
   async onunload() {
     logger.info("Unloading Recurring Tasks Plugin");
     
-    // Stop scheduler
-    this.scheduler.stop();
-    await this.eventService.shutdown();
-
-    // Flush pending task writes
-    await this.storage.flush();
+    if (taskManager.isReady()) {
+      await taskManager.destroy();
+    }
 
     // Destroy topbar menu
     if (this.topbarMenu) {
@@ -116,9 +105,9 @@ export default class RecurringTasksPlugin extends Plugin {
       this.dashboardComponent = mount(Dashboard, {
         target: this.dockEl,
         props: {
-          storage: this.storage,
-          scheduler: this.scheduler,
-          eventService: this.eventService,
+          taskService: this.taskService,
+          recurringTaskService: this.recurringTaskService,
+          eventService: taskManager.getEventService(),
         },
       });
     }
@@ -134,10 +123,12 @@ export default class RecurringTasksPlugin extends Plugin {
   private addEventListeners() {
     try {
       // Listen for custom events from commands and menus
-      window.addEventListener("recurring-task-create", this.handleCreateTaskEvent);
-      window.addEventListener("recurring-task-settings", this.handleSettingsEvent);
-      window.addEventListener("recurring-task-complete", this.handleCompleteTaskEvent);
-      window.addEventListener("task-snooze", this.handleSnoozeTaskEvent);
+      this.eventUnsubscribers = [
+        eventBus.on("recurring-task-create", this.handleCreateTaskEvent),
+        eventBus.on("recurring-task-settings", this.handleSettingsEvent),
+        eventBus.on("recurring-task-complete", this.handleCompleteTaskEvent),
+        eventBus.on("task-snooze", this.handleSnoozeTaskEvent),
+      ];
     } catch (err) {
       logger.error("Failed to add event listeners", err);
       this.removeEventListeners(); // Cleanup partial listeners
@@ -145,15 +136,12 @@ export default class RecurringTasksPlugin extends Plugin {
   }
 
   private removeEventListeners() {
-    window.removeEventListener("recurring-task-create", this.handleCreateTaskEvent);
-    window.removeEventListener("recurring-task-settings", this.handleSettingsEvent);
-    window.removeEventListener("recurring-task-complete", this.handleCompleteTaskEvent);
-    window.removeEventListener("task-snooze", this.handleSnoozeTaskEvent);
+    this.eventUnsubscribers.forEach((unsubscribe) => unsubscribe());
+    this.eventUnsubscribers = [];
   }
 
-  private handleCreateTaskEvent = (event: Event) => {
-    const customEvent = event as CustomEvent;
-    logger.info("Create task event received", customEvent.detail);
+  private handleCreateTaskEvent = (payload: RecurringTaskCreatePayload) => {
+    logger.info("Create task event received", payload);
     
     // Open the dock
     this.openDock();
@@ -162,23 +150,23 @@ export default class RecurringTasksPlugin extends Plugin {
     // This would need to be implemented in the Dashboard component
   };
 
-  private handleSettingsEvent = (event: Event) => {
-    const customEvent = event as CustomEvent;
-    logger.info("Settings event received", customEvent.detail);
+  private handleSettingsEvent = (payload: PluginEvents["recurring-task-settings"]) => {
+    logger.info("Settings event received", payload);
     
     // Open the dock
     this.openDock();
   };
 
-  private handleCompleteTaskEvent = async (event: Event) => {
-    const customEvent = event as CustomEvent;
-    const { taskId } = customEvent.detail;
+  private handleCompleteTaskEvent = async (
+    payload: PluginEvents["recurring-task-complete"]
+  ) => {
+    const { taskId } = payload;
     
     try {
-      const task = this.storage.getTask(taskId);
+      const task = taskManager.getStorage().getTask(taskId);
       if (task) {
-        await this.eventService.handleTaskCompleted(task);
-        await this.scheduler.markTaskDone(taskId);
+        await taskManager.getEventService().handleTaskCompleted(task);
+        await taskManager.getScheduler().markTaskDone(taskId);
         
         // Update topbar badge
         if (this.topbarMenu) {
@@ -192,15 +180,14 @@ export default class RecurringTasksPlugin extends Plugin {
     }
   };
 
-  private handleSnoozeTaskEvent = async (event: Event) => {
-    const customEvent = event as CustomEvent;
-    const { taskId, minutes } = customEvent.detail;
+  private handleSnoozeTaskEvent = async (payload: PluginEvents["task-snooze"]) => {
+    const { taskId, minutes } = payload;
     
     try {
-      const task = this.storage.getTask(taskId);
+      const task = taskManager.getStorage().getTask(taskId);
       if (task) {
-        await this.eventService.handleTaskSnoozed(task);
-        await this.scheduler.delayTask(taskId, minutes);
+        await taskManager.getEventService().handleTaskSnoozed(task);
+        await taskManager.getScheduler().delayTask(taskId, minutes);
         
         // Update topbar badge
         if (this.topbarMenu) {

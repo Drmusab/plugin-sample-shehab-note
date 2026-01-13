@@ -100,10 +100,12 @@ export class TaskStorage implements TaskStorageProvider {
    */
   private addToDueIndex(task: Task): void {
     const dateKey = task.dueAt.slice(0, 10); // YYYY-MM-DD
-    if (!this.dueIndex.has(dateKey)) {
-      this.dueIndex.set(dateKey, new Set());
+    const ids = this.dueIndex.get(dateKey);
+    if (ids) {
+      ids.add(task.id);
+      return;
     }
-    this.dueIndex.get(dateKey)!.add(task.id);
+    this.dueIndex.set(dateKey, new Set([task.id]));
   }
 
   /**

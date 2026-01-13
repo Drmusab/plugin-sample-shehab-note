@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Extracted task storage and recurring task operations into TaskService and RecurringTaskService to keep the dashboard UI focused on rendering and event handling.
+- Consolidated task lifecycle ownership under a singleton TaskManager and introduced a typed plugin-local event bus to replace global window events.
+- Hardened null handling in task due-index bookkeeping to reduce unsafe assertions.
+
 ## [0.0.1] - 2026-01-11
 
 ### Added

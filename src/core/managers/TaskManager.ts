@@ -10,7 +10,7 @@ import * as logger from "@/utils/logger";
  */
 export class TaskManager {
   private static instance: TaskManager | null = null;
-  private plugin: Plugin;
+  private plugin: Plugin | null;
   private isInitialized: boolean = false;
   
   // Core services
@@ -18,7 +18,7 @@ export class TaskManager {
   private scheduler!: Scheduler;
   private eventService!: EventService;
 
-  private constructor(plugin: Plugin) {
+  private constructor(plugin: Plugin | null) {
     this.plugin = plugin;
   }
 
@@ -27,35 +27,42 @@ export class TaskManager {
    */
   public static getInstance(plugin?: Plugin): TaskManager {
     if (!TaskManager.instance) {
-      if (!plugin) {
-        throw new Error('TaskManager requires plugin instance for initialization');
-      }
-      TaskManager.instance = new TaskManager(plugin);
+      TaskManager.instance = new TaskManager(plugin ?? null);
+    } else if (plugin) {
+      TaskManager.instance.setPlugin(plugin);
     }
     return TaskManager.instance;
   }
 
   /**
+   * Configure the plugin instance before initialization.
+   */
+  public setPlugin(plugin: Plugin): void {
+    this.plugin = plugin;
+  }
+
+  /**
    * Initialize all services
    */
-  public async initialize(): Promise<void> {
+  public async initialize(options: { intervalMs?: number } = {}): Promise<void> {
     if (this.isInitialized) {
       logger.warn("TaskManager already initialized");
       return;
     }
 
     logger.info("Initializing TaskManager");
+    const plugin = this.ensurePlugin();
 
     // Initialize storage
-    this.storage = new TaskStorage(this.plugin);
+    this.storage = new TaskStorage(plugin);
     await this.storage.init();
 
     // Initialize event service
-    this.eventService = new EventService(this.plugin);
+    this.eventService = new EventService(plugin);
     await this.eventService.init();
 
     // Initialize scheduler
-    this.scheduler = new Scheduler(this.storage);
+    this.scheduler = new Scheduler(this.storage, options.intervalMs, plugin);
     this.eventService.bindScheduler(this.scheduler);
 
     this.isInitialized = true;
@@ -83,7 +90,11 @@ export class TaskManager {
     this.scheduler.start();
     
     // Recover missed tasks from previous session
-    await this.scheduler.recoverMissedTasks();
+    try {
+      await this.scheduler.recoverMissedTasks();
+    } catch (err) {
+      logger.error("Failed to recover missed tasks", err);
+    }
 
     logger.info("TaskManager started");
   }
@@ -92,6 +103,11 @@ export class TaskManager {
    * Destroy the manager and cleanup resources
    */
   public async destroy(): Promise<void> {
+    if (!this.isInitialized) {
+      TaskManager.instance = null;
+      return;
+    }
+
     logger.info("Destroying TaskManager");
 
     if (this.scheduler) {
@@ -100,6 +116,10 @@ export class TaskManager {
 
     if (this.eventService) {
       await this.eventService.shutdown();
+    }
+
+    if (this.storage) {
+      await this.storage.flush();
     }
 
     this.isInitialized = false;
@@ -146,5 +166,12 @@ export class TaskManager {
     if (!this.isInitialized) {
       throw new Error("TaskManager is not initialized. Call initialize() first.");
     }
+  }
+
+  private ensurePlugin(): Plugin {
+    if (!this.plugin) {
+      throw new Error("TaskManager requires plugin instance before initialization.");
+    }
+    return this.plugin;
   }
 }

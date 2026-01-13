@@ -4,7 +4,8 @@
  */
 
 import type { Plugin } from "siyuan";
-import { TaskManager } from "@/core/managers/TaskManager";
+import { eventBus } from "@/core/EventBus";
+import { taskManager } from "@/core";
 import * as logger from "@/utils/logger";
 
 /**
@@ -31,23 +32,20 @@ export function registerBlockMenu(plugin: Plugin): void {
       icon: 'iconCalendar',
       label: plugin.i18n?.createRecurringTask || 'Create Recurring Task',
       click: () => {
-        window.dispatchEvent(new CustomEvent('recurring-task-create', {
-          detail: {
-            source: 'block-menu',
-            linkedBlockId: blockId,
-            linkedBlockContent: blockContent,
-            suggestedName: extractTaskName(blockContent),
-            suggestedTime: extractTimeFromContent(blockContent),
-          }
-        }));
+        eventBus.emit("recurring-task-create", {
+          source: "block-menu",
+          linkedBlockId: blockId,
+          linkedBlockContent: blockContent,
+          suggestedName: extractTaskName(blockContent),
+          suggestedTime: extractTimeFromContent(blockContent),
+        });
       },
     });
     
     // Check if block already has a recurring task
     try {
-      const manager = TaskManager.getInstance();
-      if (manager.isReady()) {
-        const storage = manager.getStorage();
+      if (taskManager.isReady()) {
+        const storage = taskManager.getStorage();
         const existingTask = storage.getTaskByBlockId(blockId);
         
         if (existingTask) {
@@ -59,9 +57,7 @@ export function registerBlockMenu(plugin: Plugin): void {
             icon: 'iconCheck',
             label: plugin.i18n?.completeTask || 'Complete Task',
             click: () => {
-              window.dispatchEvent(new CustomEvent('recurring-task-complete', {
-                detail: { taskId: existingTask.id }
-              }));
+              eventBus.emit("recurring-task-complete", { taskId: existingTask.id });
             },
           });
           
@@ -140,15 +136,12 @@ export function createTaskFromBlock(blockId: string, blockContent: string): void
   const time = extractTimeFromContent(blockContent);
   
   // Dispatch event to create task with block info
-  const event = new CustomEvent("recurring-task-create", {
-    detail: {
-      source: "block",
-      blockId,
-      blockContent,
-      time,
-    },
+  eventBus.emit("recurring-task-create", {
+    source: "block",
+    blockId,
+    blockContent,
+    time,
   });
-  window.dispatchEvent(event);
   
   logger.info(`Creating task from block: ${blockId}`);
 }
@@ -157,9 +150,7 @@ export function createTaskFromBlock(blockId: string, blockContent: string): void
  * Snooze a task by specified minutes
  */
 function snoozeTask(taskId: string, minutes: number): void {
-  window.dispatchEvent(new CustomEvent('task-snooze', {
-    detail: { taskId, minutes }
-  }));
+  eventBus.emit("task-snooze", { taskId, minutes });
   logger.info(`Snoozing task ${taskId} for ${minutes} minutes`);
 }
 
@@ -173,8 +164,6 @@ function snoozeToTomorrow(taskId: string): void {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minutesUntilTomorrow = Math.floor((tomorrow.getTime() - now.getTime()) / (60 * 1000));
   
-  window.dispatchEvent(new CustomEvent('task-snooze', {
-    detail: { taskId, minutes: minutesUntilTomorrow }
-  }));
+  eventBus.emit("task-snooze", { taskId, minutes: minutesUntilTomorrow });
   logger.info(`Snoozing task ${taskId} to tomorrow`);
 }

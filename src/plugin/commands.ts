@@ -3,14 +3,14 @@
  */
 
 import type { Plugin } from "siyuan";
-import type { TaskStorage } from "@/core/storage/TaskStorage";
-import { createTask } from "@/core/models/Task";
+import { eventBus } from "@/core/EventBus";
+import { taskManager } from "@/core";
 import * as logger from "@/utils/logger";
 
 /**
  * Register slash commands and keyboard shortcuts
  */
-export function registerCommands(plugin: Plugin, storage: TaskStorage): void {
+export function registerCommands(plugin: Plugin): void {
   // Slash command: /task or /recurring - Create recurring task from selection
   plugin.addCommand({
     langKey: "createRecurringTask",
@@ -35,7 +35,7 @@ export function registerCommands(plugin: Plugin, storage: TaskStorage): void {
     langKey: "quickCompleteNextTask",
     hotkey: "⌘⇧D",
     callback: async () => {
-      await quickCompleteNextTask(storage);
+      await quickCompleteNextTask();
     },
   });
 
@@ -46,20 +46,22 @@ export function registerCommands(plugin: Plugin, storage: TaskStorage): void {
  * Dispatch event to open task creation dialog
  */
 function dispatchCreateTaskEvent(): void {
-  const event = new CustomEvent("recurring-task-create", {
-    detail: {
-      source: "command",
-    },
+  eventBus.emit("recurring-task-create", {
+    source: "command",
   });
-  window.dispatchEvent(event);
 }
 
 /**
  * Quick complete the next due task
  */
-async function quickCompleteNextTask(storage: TaskStorage): Promise<void> {
+async function quickCompleteNextTask(): Promise<void> {
   try {
-    const tasks = storage.getTodayAndOverdueTasks();
+    if (!taskManager.isReady()) {
+      logger.info("Task manager not ready");
+      return;
+    }
+
+    const tasks = taskManager.getStorage().getTodayAndOverdueTasks();
     if (tasks.length === 0) {
       logger.info("No tasks due today");
       return;
@@ -69,12 +71,9 @@ async function quickCompleteNextTask(storage: TaskStorage): Promise<void> {
     const task = tasks[0];
     
     // Dispatch complete event
-    const event = new CustomEvent("recurring-task-complete", {
-      detail: {
-        taskId: task.id,
-      },
+    eventBus.emit("recurring-task-complete", {
+      taskId: task.id,
     });
-    window.dispatchEvent(event);
     
     logger.info(`Quick completing task: ${task.name}`);
   } catch (err) {

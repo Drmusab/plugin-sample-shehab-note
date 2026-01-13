@@ -3,19 +3,19 @@
  */
 
 import type { Plugin } from "siyuan";
-import type { TaskStorage } from "@/core/storage/TaskStorage";
-import { TOPBAR_ICON_ID } from "@/utils/constants";
+import type { TaskService } from "@/core/TaskService";
+import { eventBus } from "@/core/EventBus";
 import * as logger from "@/utils/logger";
 
 export class TopbarMenu {
   private plugin: Plugin;
-  private storage: TaskStorage;
+  private taskService: TaskService;
   private topbarElement: HTMLElement | null = null;
   private updateIntervalId: number | null = null;
 
-  constructor(plugin: Plugin, storage: TaskStorage) {
+  constructor(plugin: Plugin, taskService: TaskService) {
     this.plugin = plugin;
-    this.storage = storage;
+    this.taskService = taskService;
   }
 
   /**
@@ -69,7 +69,7 @@ export class TopbarMenu {
       return;
     }
 
-    const tasks = this.storage.getTodayAndOverdueTasks();
+    const tasks = this.taskService.getTodayAndOverdueTasks();
     const overdueCount = tasks.filter((task) => {
       const dueDate = new Date(task.dueAt);
       const now = new Date();
@@ -123,10 +123,7 @@ export class TopbarMenu {
   private toggleMenu(): void {
     // For now, just open the dock
     // In the future, this could show a dropdown menu
-    const event = new CustomEvent("recurring-task-settings", {
-      detail: { action: "toggle" },
-    });
-    window.dispatchEvent(event);
+    eventBus.emit("recurring-task-settings", { action: "toggle" });
   }
 
   /**

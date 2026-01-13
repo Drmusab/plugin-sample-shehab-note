@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Task } from "@/core/models/Task";
   import { calculateTaskHealth } from "@/core/models/Task";
+  import { eventBus } from "@/core/EventBus";
   import { formatDateTime, isOverdue, isToday } from "@/utils/date";
   import { PRIORITY_COLORS, SNOOZE_OPTIONS } from "@/utils/constants";
 
@@ -75,10 +76,7 @@
 
   function handleSnooze(minutes: number) {
     // Dispatch custom event for snoozing
-    const event = new CustomEvent("task-snooze", {
-      detail: { taskId: task.id, minutes },
-    });
-    window.dispatchEvent(event);
+    eventBus.emit("task-snooze", { taskId: task.id, minutes });
     showSnoozeMenu = false;
   }
 </script>
