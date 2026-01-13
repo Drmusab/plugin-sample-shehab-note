@@ -10,6 +10,7 @@ import { registerBlockMenu } from "./plugin/menus";
 import { TopbarMenu } from "./plugin/topbar";
 import { DOCK_TYPE, SCHEDULER_INTERVAL_MS, STORAGE_ACTIVE_KEY } from "./utils/constants";
 import * as logger from "./utils/logger";
+import { toast } from "./utils/notifications";
 import "./index.scss";
 
 export default class RecurringTasksPlugin extends Plugin {
@@ -152,29 +153,42 @@ export default class RecurringTasksPlugin extends Plugin {
   }
 
   private handleCreateTaskEvent = (event: Event) => {
-    const customEvent = event as CustomEvent;
-    logger.info("Create task event received", customEvent.detail);
-    
-    // Open the dock
-    this.openDock();
-    
-    // Dispatch event to dashboard to open task form
-    // This would need to be implemented in the Dashboard component
+    try {
+      const customEvent = event as CustomEvent<{ action?: string }>;
+      logger.info("Create task event received", customEvent.detail);
+
+      // Open the dock
+      this.openDock();
+
+      // Dispatch event to dashboard to open task form
+      // This would need to be implemented in the Dashboard component
+    } catch (err) {
+      logger.error("Failed to handle create task event", err);
+      toast.error("Failed to open task creator.");
+    }
   };
 
   private handleSettingsEvent = (event: Event) => {
-    const customEvent = event as CustomEvent;
-    logger.info("Settings event received", customEvent.detail);
-    
-    // Open the dock
-    this.openDock();
+    try {
+      const customEvent = event as CustomEvent<{ action?: string }>;
+      logger.info("Settings event received", customEvent.detail);
+
+      // Open the dock
+      this.openDock();
+    } catch (err) {
+      logger.error("Failed to handle settings event", err);
+      toast.error("Failed to open settings.");
+    }
   };
 
   private handleCompleteTaskEvent = async (event: Event) => {
-    const customEvent = event as CustomEvent;
-    const { taskId } = customEvent.detail;
-    
     try {
+      const customEvent = event as CustomEvent<{ taskId?: string }>;
+      const { taskId } = customEvent.detail ?? {};
+      if (!taskId) {
+        throw new Error("Missing taskId for completion event.");
+      }
+
       const task = this.storage.getTask(taskId);
       if (task) {
         await this.eventService.handleTaskCompleted(task);
@@ -189,14 +203,18 @@ export default class RecurringTasksPlugin extends Plugin {
       }
     } catch (err) {
       logger.error("Failed to complete task", err);
+      toast.error("Failed to complete task.");
     }
   };
 
   private handleSnoozeTaskEvent = async (event: Event) => {
-    const customEvent = event as CustomEvent;
-    const { taskId, minutes } = customEvent.detail;
-    
     try {
+      const customEvent = event as CustomEvent<{ taskId?: string; minutes?: number }>;
+      const { taskId, minutes } = customEvent.detail ?? {};
+      if (!taskId || typeof minutes !== "number") {
+        throw new Error("Missing task snooze details.");
+      }
+
       const task = this.storage.getTask(taskId);
       if (task) {
         await this.eventService.handleTaskSnoozed(task);
@@ -211,6 +229,7 @@ export default class RecurringTasksPlugin extends Plugin {
       }
     } catch (err) {
       logger.error("Failed to snooze task", err);
+      toast.error("Failed to snooze task.");
     }
   };
 }

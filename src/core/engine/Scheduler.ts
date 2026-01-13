@@ -4,7 +4,14 @@ import { RecurrenceEngine } from "./RecurrenceEngine";
 import { TimezoneHandler } from "./TimezoneHandler";
 import type { SchedulerEventListener, SchedulerEventType, TaskDueEvent } from "./SchedulerEvents";
 import { recordCompletion, recordMiss } from "@/core/models/Task";
-import { MISSED_GRACE_PERIOD_MS, SCHEDULER_INTERVAL_MS, LAST_RUN_TIMESTAMP_KEY, MAX_RECOVERY_ITERATIONS } from "@/utils/constants";
+import {
+  DEFAULT_MAX_SNOOZES,
+  EMITTED_OCCURRENCES_KEY,
+  LAST_RUN_TIMESTAMP_KEY,
+  MAX_RECOVERY_ITERATIONS,
+  MISSED_GRACE_PERIOD_MS,
+  SCHEDULER_INTERVAL_MS,
+} from "@/utils/constants";
 import * as logger from "@/utils/logger";
 import type { Plugin } from "siyuan";
 
@@ -33,6 +40,9 @@ export class Scheduler {
     "task:overdue": new Set(),
   };
   private readonly MAX_EMITTED_ENTRIES = 1000;
+  private readonly EMITTED_SAVE_DEBOUNCE_MS = 1500;
+  private persistTimeoutId: number | null = null;
+  private emittedStateReady: Promise<void> | null = null;
 
   constructor(
     storage: TaskStorage,
@@ -58,26 +68,32 @@ export class Scheduler {
    * Start the scheduler
    */
   start(): void {
-    this.checkDueTasks(); // Check immediately
-    this.isRunning = true;
+    const startScheduler = (): void => {
+      this.checkDueTasks(); // Check immediately
+      this.isRunning = true;
 
-    const scheduleNextTick = (): void => {
-      if (!this.isRunning) {
-        return;
-      }
-      const now = Date.now();
-      const intervalMs = this.intervalMs > 0 ? this.intervalMs : SCHEDULER_INTERVAL_MS;
-      const delay = intervalMs - (now % intervalMs);
-      this.intervalId = setTimeout(() => {
-        this.checkDueTasks();
-        scheduleNextTick();
-      }, delay) as unknown as number;
+      const scheduleNextTick = (): void => {
+        if (!this.isRunning) {
+          return;
+        }
+        const now = Date.now();
+        const intervalMs = this.intervalMs > 0 ? this.intervalMs : SCHEDULER_INTERVAL_MS;
+        const delay = intervalMs - (now % intervalMs);
+        this.intervalId = setTimeout(() => {
+          this.checkDueTasks();
+          scheduleNextTick();
+        }, delay) as unknown as number;
+      };
+
+      // Use a self-correcting timeout to prevent long-uptime drift.
+      scheduleNextTick();
+
+      logger.info("Scheduler started");
     };
 
-    // Use a self-correcting timeout to prevent long-uptime drift.
-    scheduleNextTick();
-
-    logger.info("Scheduler started");
+    void this.ensureEmittedStateLoaded().finally(() => {
+      startScheduler();
+    });
   }
 
   /**
@@ -89,6 +105,7 @@ export class Scheduler {
       this.intervalId = null;
     }
     this.isRunning = false;
+    void this.persistEmittedState();
     logger.info("Scheduler stopped");
   }
 
@@ -145,7 +162,7 @@ export class Scheduler {
               context: "today",
               task,
             });
-            this.emittedDue.add(taskKey);
+            this.registerEmittedKey("due", taskKey);
             logger.info(`Task due: ${task.name}`, { taskId: task.id, dueAt: task.dueAt });
           }
         }
@@ -168,7 +185,7 @@ export class Scheduler {
               context: "overdue",
               task,
             });
-            this.emittedMissed.add(taskKey);
+            this.registerEmittedKey("missed", taskKey);
             logger.warn(`Task missed: ${task.name}`, { taskId: task.id, dueAt: task.dueAt });
           }
         }
@@ -182,16 +199,23 @@ export class Scheduler {
   }
 
   private cleanupEmittedSets(): void {
+    let didTrim = false;
     if (this.emittedDue.size > this.MAX_EMITTED_ENTRIES) {
       const entries = Array.from(this.emittedDue);
       this.emittedDue = new Set(entries.slice(-this.MAX_EMITTED_ENTRIES / 2));
+      didTrim = true;
       logger.info(`Cleaned up emittedDue set: ${entries.length} -> ${this.emittedDue.size}`);
     }
     
     if (this.emittedMissed.size > this.MAX_EMITTED_ENTRIES) {
       const entries = Array.from(this.emittedMissed);
       this.emittedMissed = new Set(entries.slice(-this.MAX_EMITTED_ENTRIES / 2));
+      didTrim = true;
       logger.info(`Cleaned up emittedMissed set: ${entries.length} -> ${this.emittedMissed.size}`);
+    }
+
+    if (didTrim) {
+      this.schedulePersistEmittedState();
     }
   }
 
@@ -233,6 +257,8 @@ export class Scheduler {
       throw new Error(`Task not found: ${taskId}`);
     }
 
+    this.assertSnoozeAvailable(task);
+
     const currentDue = new Date(task.dueAt);
     const delayed = new Date(currentDue.getTime() + delayMinutes * 60 * 1000);
 
@@ -251,6 +277,8 @@ export class Scheduler {
     if (!task) {
       throw new Error(`Task not found: ${taskId}`);
     }
+
+    this.assertSnoozeAvailable(task);
 
     const currentDue = new Date(task.dueAt);
     const tomorrow = this.timezoneHandler.tomorrow();
@@ -313,6 +341,7 @@ export class Scheduler {
    * Based on patterns from siyuan-dailynote-today (RoutineEventHandler)
    */
   async recoverMissedTasks(): Promise<void> {
+    await this.ensureEmittedStateLoaded();
     const lastRunAt = await this.loadLastRunTimestamp();
     const now = new Date();
     
@@ -343,7 +372,7 @@ export class Scheduler {
               context: "overdue",
               task,
             });
-            this.emittedMissed.add(taskKey);
+            this.registerEmittedKey("missed", taskKey);
           }
         }
         
@@ -355,6 +384,7 @@ export class Scheduler {
     }
     
     await this.saveLastRunTimestamp(now);
+    this.cleanupEmittedSets();
     logger.info("Missed task recovery completed");
   }
 
@@ -450,6 +480,85 @@ export class Scheduler {
       } catch (err) {
         logger.error(`Scheduler listener error for ${eventType}:`, err);
       }
+    }
+  }
+
+  private assertSnoozeAvailable(task: Task): void {
+    const maxSnoozes = task.maxSnoozes ?? DEFAULT_MAX_SNOOZES;
+    const snoozeCount = task.snoozeCount ?? 0;
+
+    if (maxSnoozes <= 0) {
+      throw new Error("Snoozing is disabled for this task.");
+    }
+
+    if (snoozeCount >= maxSnoozes) {
+      throw new Error(`Snooze limit reached (${maxSnoozes}).`);
+    }
+  }
+
+  private registerEmittedKey(kind: "due" | "missed", key: string): void {
+    if (kind === "due") {
+      this.emittedDue.add(key);
+    } else {
+      this.emittedMissed.add(key);
+    }
+    this.schedulePersistEmittedState();
+  }
+
+  private ensureEmittedStateLoaded(): Promise<void> {
+    if (!this.emittedStateReady) {
+      this.emittedStateReady = this.restoreEmittedState();
+    }
+    return this.emittedStateReady;
+  }
+
+  private async restoreEmittedState(): Promise<void> {
+    if (!this.plugin) {
+      return;
+    }
+
+    try {
+      const data = await this.plugin.loadData(EMITTED_OCCURRENCES_KEY);
+      const due = Array.isArray(data?.due) ? data.due.filter((entry: unknown) => typeof entry === "string") : [];
+      const missed = Array.isArray(data?.missed) ? data.missed.filter((entry: unknown) => typeof entry === "string") : [];
+      this.emittedDue = new Set(due.slice(-this.MAX_EMITTED_ENTRIES));
+      this.emittedMissed = new Set(missed.slice(-this.MAX_EMITTED_ENTRIES));
+      logger.info("Restored scheduler emitted state", {
+        due: this.emittedDue.size,
+        missed: this.emittedMissed.size,
+      });
+    } catch (err) {
+      logger.error("Failed to restore scheduler emitted state:", err);
+    }
+  }
+
+  private schedulePersistEmittedState(): void {
+    if (!this.plugin) {
+      return;
+    }
+
+    if (this.persistTimeoutId !== null) {
+      return;
+    }
+
+    this.persistTimeoutId = setTimeout(() => {
+      this.persistTimeoutId = null;
+      void this.persistEmittedState();
+    }, this.EMITTED_SAVE_DEBOUNCE_MS) as unknown as number;
+  }
+
+  private async persistEmittedState(): Promise<void> {
+    if (!this.plugin) {
+      return;
+    }
+
+    try {
+      await this.plugin.saveData(EMITTED_OCCURRENCES_KEY, {
+        due: Array.from(this.emittedDue),
+        missed: Array.from(this.emittedMissed),
+      });
+    } catch (err) {
+      logger.error("Failed to persist scheduler emitted state:", err);
     }
   }
 

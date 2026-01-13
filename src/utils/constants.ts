@@ -21,6 +21,8 @@ export const DOCK_TYPE = "recurring-tasks-dock";
 
 export const TOPBAR_ICON_ID = "recurring-tasks-topbar";
 
+export const EMITTED_OCCURRENCES_KEY = "scheduler-emitted-occurrences";
+
 /**
  * Schema version for data migrations
  */

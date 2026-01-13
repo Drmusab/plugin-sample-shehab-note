@@ -1,3 +1,5 @@
+import { confirm as siyuanConfirm } from "siyuan";
+
 /**
  * Simple toast notification utility
  * Can be enhanced with more sophisticated UI in the future
@@ -85,9 +87,15 @@ export const toast = {
 /**
  * Confirm dialog replacement
  */
-export function confirm(message: string): boolean {
-  // For now, use native confirm but can be replaced with custom modal
-  return window.confirm(message);
+export function confirm(message: string, title = "Confirm"): Promise<boolean> {
+  return new Promise((resolve) => {
+    siyuanConfirm(
+      title,
+      message,
+      () => resolve(true),
+      () => resolve(false)
+    );
+  });
 }
 
 // Add CSS animations if not already present

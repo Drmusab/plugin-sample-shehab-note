@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { Task } from "@/core/models/Task";
   import { formatDateTime } from "@/utils/date";
-  import { confirm } from "@/utils/notifications";
 
   interface Props {
     tasks: Task[];

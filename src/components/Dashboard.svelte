@@ -56,6 +56,7 @@
   loadTasksFromStorage();
 
   async function handleTaskDone(task: Task) {
+    const previousTasks = allTasks;
     const nextTasks = updateTaskById(allTasks, task.id, (current) => {
       const nextTask = { ...current };
       recordCompletion(nextTask);
@@ -67,16 +68,18 @@
     allTasks = nextTasks;
     toast.success(`Task "${task.name}" completed and rescheduled`);
 
-    void eventService
-      .emitTaskEvent("task.completed", task)
-      .then(() => scheduler.markTaskDone(task.id))
-      .catch((err) => {
-        toast.error("Failed to mark task as done: " + err);
-        loadTasksFromStorage("external");
-      });
+    try {
+      await eventService.emitTaskEvent("task.completed", task);
+      await scheduler.markTaskDone(task.id);
+    } catch (err) {
+      allTasks = previousTasks;
+      toast.error("Failed to mark task as done: " + err);
+      loadTasksFromStorage("external");
+    }
   }
 
   async function handleTaskDelay(task: Task) {
+    const previousTasks = allTasks;
     const nextTasks = updateTaskById(allTasks, task.id, (current) => {
       const nextTask = { ...current };
       const currentDue = new Date(nextTask.dueAt);
@@ -91,13 +94,14 @@
     allTasks = nextTasks;
     toast.info(`Task "${task.name}" delayed to tomorrow`);
 
-    void eventService
-      .emitTaskEvent("task.snoozed", task)
-      .then(() => scheduler.delayTaskToTomorrow(task.id))
-      .catch((err) => {
-        toast.error("Failed to delay task: " + err);
-        loadTasksFromStorage("external");
-      });
+    try {
+      await eventService.emitTaskEvent("task.snoozed", task);
+      await scheduler.delayTaskToTomorrow(task.id);
+    } catch (err) {
+      allTasks = previousTasks;
+      toast.error("Failed to delay task: " + err);
+      loadTasksFromStorage("external");
+    }
   }
 
   async function handleSaveTask(task: Task) {
@@ -171,6 +175,7 @@
   }
 
   async function handleTaskSkip(task: Task) {
+    const previousTasks = allTasks;
     const nextTasks = updateTaskById(allTasks, task.id, (current) => {
       const nextTask = { ...current };
       recordMiss(nextTask);
@@ -182,13 +187,14 @@
     allTasks = nextTasks;
     toast.info(`Task "${task.name}" skipped to next occurrence`);
 
-    void eventService
-      .emitTaskEvent("task.skipped", task)
-      .then(() => scheduler.skipTaskOccurrence(task.id))
-      .catch((err) => {
-        toast.error("Failed to skip task: " + err);
-        loadTasksFromStorage("external");
-      });
+    try {
+      await eventService.emitTaskEvent("task.skipped", task);
+      await scheduler.skipTaskOccurrence(task.id);
+    } catch (err) {
+      allTasks = previousTasks;
+      toast.error("Failed to skip task: " + err);
+      loadTasksFromStorage("external");
+    }
   }
 </script>
 
