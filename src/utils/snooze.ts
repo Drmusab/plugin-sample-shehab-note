@@ -1,4 +1,5 @@
 import { pluginEventBus } from "@/core/events/PluginEventBus";
+import { startOfDay } from "@/utils/date";
 import * as logger from "@/utils/logger";
 
 export function snoozeTask(taskId: string, minutes: number): void {
@@ -16,7 +17,11 @@ export function snoozeToTomorrow(taskId: string): void {
   const now = new Date();
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const minutesUntilTomorrow = Math.floor((tomorrow.getTime() - now.getTime()) / (60 * 1000));
+  const tomorrowStart = startOfDay(tomorrow);
+  const minutesUntilTomorrow = Math.max(
+    0,
+    Math.floor((tomorrowStart.getTime() - now.getTime()) / (60 * 1000))
+  );
 
   // Use pluginEventBus for internal communication
   pluginEventBus.emit('task:snooze', { taskId, minutes: minutesUntilTomorrow });

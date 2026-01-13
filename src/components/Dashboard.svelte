@@ -38,6 +38,7 @@
   let showSettings = $state(false);
   let editingTask = $state<Task | undefined>(undefined);
   const pendingCompletions = new Map<string, { timeoutId: number; snapshot: Task }>();
+  const completionLocks = new Set<string>();
   /**
    * Dashboard task state (single UI source of truth).
    * Storage is only used for initial hydration or explicit reloads.
@@ -90,14 +91,20 @@
       window.clearTimeout(timeoutId);
     });
     pendingCompletions.clear();
+    completionLocks.clear();
   });
 
   async function handleTaskDone(task: Task) {
+    if (completionLocks.has(task.id)) {
+      toast.info(`Completion already in progress for "${task.name}".`);
+      return;
+    }
     if (pendingCompletions.has(task.id)) {
       toast.info(`Completion already pending for "${task.name}".`);
       return;
     }
 
+    completionLocks.add(task.id);
     const snapshot = JSON.parse(JSON.stringify(task)) as Task;
     const nextTasks = updateTaskById(allTasks, task.id, (current) => {
       const nextTask = { ...current };
@@ -119,12 +126,15 @@
         allTasks = updateTaskById(allTasks, task.id, () => snapshot);
         toast.error("Failed to mark task as done: " + err);
         loadTasksFromStorage("external");
+      } finally {
+        completionLocks.delete(task.id);
       }
     }, 5000);
 
     const undoCompletion = () => {
       window.clearTimeout(undoTimeout);
       pendingCompletions.delete(task.id);
+      completionLocks.delete(task.id);
       allTasks = updateTaskById(allTasks, task.id, () => snapshot);
       toast.info(`Undo: "${task.name}" restored`);
     };
@@ -137,6 +147,7 @@
       duration: 5000,
       actionLabel: "Undo",
       onAction: undoCompletion,
+      showCountdown: true,
     });
 
     return;
@@ -215,6 +226,7 @@
         allTasks = previousTasks;
         toast.info(`Restored "${task.name}"`);
       },
+      showCountdown: true,
     });
   }
 

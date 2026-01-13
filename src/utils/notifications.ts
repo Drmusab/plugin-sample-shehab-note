@@ -13,13 +13,21 @@ interface ToastOptions {
   duration?: number;
   actionLabel?: string;
   onAction?: () => void;
+  showCountdown?: boolean;
 }
 
 /**
  * Show a toast notification
  */
 export function showToast(options: ToastOptions): void {
-  const { message, type = "info", duration = 3000, actionLabel, onAction } = options;
+  const {
+    message,
+    type = "info",
+    duration = 3000,
+    actionLabel,
+    onAction,
+    showCountdown = false,
+  } = options;
 
   // Create toast element
   const toast = document.createElement("div");
@@ -28,18 +36,37 @@ export function showToast(options: ToastOptions): void {
   messageEl.textContent = message;
   toast.appendChild(messageEl);
 
+  let countdownInterval: number | null = null;
+
   if (actionLabel && onAction) {
     const actionButton = document.createElement("button");
     actionButton.type = "button";
-    actionButton.textContent = actionLabel;
+    let remainingSeconds = Math.max(1, Math.ceil(duration / 1000));
+    actionButton.textContent = showCountdown
+      ? `${actionLabel} (${remainingSeconds}s)`
+      : actionLabel;
     actionButton.className = "recurring-tasks-toast__action";
     actionButton.addEventListener("click", () => {
       onAction();
+      if (countdownInterval !== null) {
+        window.clearInterval(countdownInterval);
+      }
       if (toast.parentElement) {
         toast.parentElement.removeChild(toast);
       }
     });
     toast.appendChild(actionButton);
+
+    if (showCountdown && duration > 0) {
+      countdownInterval = window.setInterval(() => {
+        remainingSeconds = Math.max(0, remainingSeconds - 1);
+        actionButton.textContent = `${actionLabel} (${remainingSeconds}s)`;
+        if (remainingSeconds <= 0 && countdownInterval !== null) {
+          window.clearInterval(countdownInterval);
+          countdownInterval = null;
+        }
+      }, 1000);
+    }
   }
 
   // Add styles
@@ -66,6 +93,9 @@ export function showToast(options: ToastOptions): void {
   document.body.appendChild(toast);
 
   const dismissToast = () => {
+    if (countdownInterval !== null) {
+      window.clearInterval(countdownInterval);
+    }
     toast.style.animation = "slideOutRight 0.3s ease-out";
     setTimeout(() => {
       if (toast.parentElement) {

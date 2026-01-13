@@ -273,6 +273,7 @@ export default class RecurringTasksPlugin extends Plugin {
         duration: 5000,
         actionLabel: "Undo",
         onAction: undoCompletion,
+        showCountdown: true,
       });
     }
   }

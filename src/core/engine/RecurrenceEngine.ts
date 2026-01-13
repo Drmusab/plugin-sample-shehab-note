@@ -106,34 +106,28 @@ export class RecurrenceEngine {
       return addWeeks(currentDue, interval);
     }
 
-    // Find next occurrence on specified weekdays
     const currentDay = this.getMondayIndex(currentDue);
-    let daysToAdd = 0;
-    let found = false;
+    const maxIterations = Math.min(MAX_RECURRENCE_ITERATIONS, interval * 14);
 
-    // Sort weekdays to process in order
-    const sortedWeekdays = weekdays;
+    for (let daysAhead = 1; daysAhead <= maxIterations; daysAhead++) {
+      const weeksSinceCurrent = Math.floor((currentDay + daysAhead) / 7);
+      if (weeksSinceCurrent % interval !== 0) {
+        continue;
+      }
 
-    // First, check remaining days in current week
-    for (const weekday of sortedWeekdays) {
-      if (weekday > currentDay) {
-        daysToAdd = weekday - currentDay;
-        found = true;
-        break;
+      const candidate = addDays(currentDue, daysAhead);
+      const candidateDay = this.getMondayIndex(candidate);
+      if (weekdays.includes(candidateDay)) {
+        return candidate;
       }
     }
 
-    // If not found in current week, go to next interval period
-    if (!found) {
-      // Move to first weekday in the next occurrence
-      const firstWeekday = sortedWeekdays[0];
-      // Calculate days to the first weekday of next interval
-      const daysToEndOfWeek = 7 - currentDay;
-      const weeksToSkip = interval - 1;
-      daysToAdd = daysToEndOfWeek + (weeksToSkip * 7) + firstWeekday;
-    }
-
-    return addDays(currentDue, daysToAdd);
+    logger.warn("Weekly recurrence guard hit, falling back to interval weeks.", {
+      currentDue: currentDue.toISOString(),
+      interval,
+      weekdays,
+    });
+    return addWeeks(currentDue, interval);
   }
 
   /**

@@ -6,6 +6,7 @@ import type { Plugin } from "siyuan";
 import type { TaskStorage } from "@/core/storage/TaskStorage";
 import { pluginEventBus } from "@/core/events/PluginEventBus";
 import { TOPBAR_ICON_ID } from "@/utils/constants";
+import { isToday } from "@/utils/date";
 import * as logger from "@/utils/logger";
 
 export class TopbarMenu {
@@ -74,7 +75,7 @@ export class TopbarMenu {
     const overdueCount = tasks.filter((task) => {
       const dueDate = new Date(task.dueAt);
       const now = new Date();
-      return dueDate < now && !this.isToday(dueDate);
+      return dueDate < now && !isToday(dueDate);
     }).length;
 
     // Update badge
@@ -104,18 +105,6 @@ export class TopbarMenu {
         badge.remove();
       }
     }
-  }
-
-  /**
-   * Check if date is today
-   */
-  private isToday(date: Date): boolean {
-    const today = new Date();
-    return (
-      date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear()
-    );
   }
 
   /**
