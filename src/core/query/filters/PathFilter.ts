@@ -7,7 +7,6 @@ export class PathFilter extends Filter {
   }
 
   matches(task: Task): boolean {
-    // @ts-ignore - path field may not exist yet in Task interface
     const path = task.path || '';
     const result = path.toLowerCase().includes(this.pattern.toLowerCase());
     return this.negate ? !result : result;

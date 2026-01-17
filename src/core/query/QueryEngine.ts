@@ -229,7 +229,6 @@ export class QueryEngine {
           comparison = (a.description || '').localeCompare(b.description || '');
           break;
         case 'path':
-          // @ts-ignore - path field may not exist yet
           comparison = (a.path || '').localeCompare(b.path || '');
           break;
         default:

@@ -2,44 +2,14 @@ import { Grouper } from './GrouperBase';
 import type { Task } from '@/core/models/Task';
 
 export class PathGrouper extends Grouper {
-  group(tasks: Task[]): Map<string, Task[]> {
-    const groups = new Map<string, Task[]>();
-    
-    for (const task of tasks) {
-      const key = this.getGroupKey(task);
-      if (!groups.has(key)) {
-        groups.set(key, []);
-      }
-      groups.get(key)!.push(task);
-    }
-    
-    return groups;
-  }
-
   getGroupKey(task: Task): string {
-    // @ts-ignore - path field may not exist yet in Task interface
     const path = task.path || '';
     return path || 'No path';
   }
 }
 
 export class FolderGrouper extends Grouper {
-  group(tasks: Task[]): Map<string, Task[]> {
-    const groups = new Map<string, Task[]>();
-    
-    for (const task of tasks) {
-      const key = this.getGroupKey(task);
-      if (!groups.has(key)) {
-        groups.set(key, []);
-      }
-      groups.get(key)!.push(task);
-    }
-    
-    return groups;
-  }
-
   getGroupKey(task: Task): string {
-    // @ts-ignore - path field may not exist yet in Task interface
     const path = task.path || '';
     
     if (!path) {
@@ -57,6 +27,8 @@ export class FolderGrouper extends Grouper {
 }
 
 export class TagGrouper extends Grouper {
+  // Override group() for special tag grouping behavior
+  // where tasks can appear in multiple groups
   group(tasks: Task[]): Map<string, Task[]> {
     const groups = new Map<string, Task[]>();
     
