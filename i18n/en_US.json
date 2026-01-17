@@ -1,0 +1,87 @@
+{
+  "name": "Recurring Task Manager",
+  "description": "Advanced recurring task management with notifications",
+  "tabs": {
+    "today": "Today & Overdue",
+    "all": "All Tasks",
+    "timeline": "Timeline"
+  },
+  "task": {
+    "name": "Task Name",
+    "dueAt": "Due At",
+    "frequency": "Frequency",
+    "status": "Status",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "lastCompleted": "Last Completed",
+    "nextDue": "Next Due",
+    "noTasks": "No tasks found",
+    "createNew": "Create New Task",
+    "edit": "Edit Task",
+    "delete": "Delete Task",
+    "confirmDelete": "Are you sure you want to delete this task?"
+  },
+  "actions": {
+    "done": "Done",
+    "delay": "Delay to Tomorrow",
+    "save": "Save",
+    "cancel": "Cancel",
+    "test": "Test",
+    "enable": "Enable",
+    "disable": "Disable"
+  },
+  "frequency": {
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "interval": "Every",
+    "days": "day(s)",
+    "weeks": "week(s)",
+    "months": "month(s)",
+    "time": "Time",
+    "weekdays": "Weekdays",
+    "sunday": "Sunday",
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday"
+  },
+  "notifications": {
+    "title": "Notification Settings",
+    "n8n": "n8n Webhook",
+    "telegram": "Telegram",
+    "gmail": "Gmail",
+    "webhookUrl": "Webhook URL",
+    "botToken": "Bot Token",
+    "chatId": "Chat ID",
+    "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "refreshToken": "Refresh Token",
+    "recipientEmail": "Recipient Email",
+    "testSuccess": "Test notification sent successfully",
+    "testFailed": "Failed to send test notification"
+  },
+  "payload": {
+    "title": "Alert Payload",
+    "note": "Note",
+    "media": "Media URL",
+    "link": "Link"
+  },
+  "timeline": {
+    "title": "Scheduled Tasks",
+    "next7Days": "Next 7 Days",
+    "next30Days": "Next 30 Days",
+    "noTasksInRange": "No tasks scheduled in this period"
+  },
+  "messages": {
+    "taskCreated": "Task created successfully",
+    "taskUpdated": "Task updated successfully",
+    "taskDeleted": "Task deleted successfully",
+    "taskCompleted": "Task marked as done and rescheduled",
+    "taskDelayed": "Task delayed to tomorrow",
+    "saveFailed": "Failed to save task",
+    "loadFailed": "Failed to load tasks"
+  }
+}
