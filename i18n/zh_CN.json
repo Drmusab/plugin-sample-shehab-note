@@ -1,0 +1,87 @@
+{
+  "name": "循环任务管理器",
+  "description": "高级循环任务管理与通知",
+  "tabs": {
+    "today": "今天和逾期",
+    "all": "所有任务",
+    "timeline": "时间线"
+  },
+  "task": {
+    "name": "任务名称",
+    "dueAt": "到期时间",
+    "frequency": "频率",
+    "status": "状态",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "lastCompleted": "上次完成",
+    "nextDue": "下次到期",
+    "noTasks": "未找到任务",
+    "createNew": "创建新任务",
+    "edit": "编辑任务",
+    "delete": "删除任务",
+    "confirmDelete": "确定要删除此任务吗？"
+  },
+  "actions": {
+    "done": "完成",
+    "delay": "推迟到明天",
+    "save": "保存",
+    "cancel": "取消",
+    "test": "测试",
+    "enable": "启用",
+    "disable": "禁用"
+  },
+  "frequency": {
+    "daily": "每天",
+    "weekly": "每周",
+    "monthly": "每月",
+    "interval": "每",
+    "days": "天",
+    "weeks": "周",
+    "months": "月",
+    "time": "时间",
+    "weekdays": "星期",
+    "sunday": "星期日",
+    "monday": "星期一",
+    "tuesday": "星期二",
+    "wednesday": "星期三",
+    "thursday": "星期四",
+    "friday": "星期五",
+    "saturday": "星期六"
+  },
+  "notifications": {
+    "title": "通知设置",
+    "n8n": "n8n Webhook",
+    "telegram": "Telegram",
+    "gmail": "Gmail",
+    "webhookUrl": "Webhook URL",
+    "botToken": "Bot Token",
+    "chatId": "Chat ID",
+    "clientId": "客户端 ID",
+    "clientSecret": "客户端密钥",
+    "refreshToken": "刷新令牌",
+    "recipientEmail": "收件人邮箱",
+    "testSuccess": "测试通知发送成功",
+    "testFailed": "测试通知发送失败"
+  },
+  "payload": {
+    "title": "提醒内容",
+    "note": "笔记",
+    "media": "媒体 URL",
+    "link": "链接"
+  },
+  "timeline": {
+    "title": "计划任务",
+    "next7Days": "未来 7 天",
+    "next30Days": "未来 30 天",
+    "noTasksInRange": "此期间没有计划任务"
+  },
+  "messages": {
+    "taskCreated": "任务创建成功",
+    "taskUpdated": "任务更新成功",
+    "taskDeleted": "任务删除成功",
+    "taskCompleted": "任务已完成并重新安排",
+    "taskDelayed": "任务已推迟到明天",
+    "saveFailed": "保存任务失败",
+    "loadFailed": "加载任务失败"
+  }
+}
