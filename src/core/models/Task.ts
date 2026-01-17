@@ -128,6 +128,9 @@ export interface Task {
 
   /** The character in the checkbox for line-based tasks */
   statusSymbol?: string;
+
+  /** File path (for path-based filtering) */
+  path?: string;
 }
 
 /**
