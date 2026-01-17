@@ -116,6 +116,12 @@ export interface Task {
   
   /** Cancellation timestamp (ISO string) */
   cancelledAt?: string;
+
+  /** Action to take when task is completed */
+  onCompletion?: 'keep' | 'delete';
+
+  /** The character in the checkbox for line-based tasks */
+  statusSymbol?: string;
 }
 
 /**
