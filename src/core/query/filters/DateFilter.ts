@@ -1,0 +1,104 @@
+import { Filter } from './FilterBase';
+import type { Task } from '@/core/models/Task';
+
+export type DateComparator = 'before' | 'after' | 'on' | 'on or before' | 'on or after';
+export type DateField = 'due' | 'scheduled' | 'start' | 'created' | 'done' | 'cancelled';
+
+export class DateComparisonFilter extends Filter {
+  constructor(
+    private field: DateField,
+    private comparator: DateComparator,
+    private targetDate: Date
+  ) {
+    super();
+  }
+
+  matches(task: Task): boolean {
+    const taskDate = this.getTaskDate(task);
+    if (!taskDate) {
+      return false;
+    }
+
+    // Normalize dates to midnight for comparison
+    const target = new Date(this.targetDate);
+    target.setHours(0, 0, 0, 0);
+    
+    const actual = new Date(taskDate);
+    actual.setHours(0, 0, 0, 0);
+
+    switch (this.comparator) {
+      case 'before':
+        return actual < target;
+      case 'after':
+        return actual > target;
+      case 'on':
+        return actual.getTime() === target.getTime();
+      case 'on or before':
+        return actual <= target;
+      case 'on or after':
+        return actual >= target;
+      default:
+        return false;
+    }
+  }
+
+  private getTaskDate(task: Task): Date | null {
+    let dateStr: string | undefined;
+    
+    switch (this.field) {
+      case 'due':
+        dateStr = task.dueAt;
+        break;
+      case 'scheduled':
+        dateStr = task.scheduledAt;
+        break;
+      case 'start':
+        dateStr = task.startAt;
+        break;
+      case 'created':
+        dateStr = task.createdAt;
+        break;
+      case 'done':
+        dateStr = task.doneAt;
+        break;
+      case 'cancelled':
+        dateStr = task.cancelledAt;
+        break;
+    }
+
+    return dateStr ? new Date(dateStr) : null;
+  }
+}
+
+export class HasDateFilter extends Filter {
+  constructor(private field: DateField, private negate = false) {
+    super();
+  }
+
+  matches(task: Task): boolean {
+    let hasDate = false;
+    
+    switch (this.field) {
+      case 'due':
+        hasDate = !!task.dueAt;
+        break;
+      case 'scheduled':
+        hasDate = !!task.scheduledAt;
+        break;
+      case 'start':
+        hasDate = !!task.startAt;
+        break;
+      case 'created':
+        hasDate = !!task.createdAt;
+        break;
+      case 'done':
+        hasDate = !!task.doneAt;
+        break;
+      case 'cancelled':
+        hasDate = !!task.cancelledAt;
+        break;
+    }
+
+    return this.negate ? !hasDate : hasDate;
+  }
+}
