@@ -54,6 +54,25 @@ export class RecurrenceParser {
 
     const rest = everyMatch[1];
 
+    // Try to parse "weekday" or "weekend" pattern
+    if (rest === 'weekday' || rest === 'weekdays') {
+      // Monday=0 to Friday=4
+      return {
+        frequency: { type: "weekly", interval: 1, weekdays: [0, 1, 2, 3, 4] },
+        raw,
+        isValid: true,
+      };
+    }
+
+    if (rest === 'weekend' || rest === 'weekends') {
+      // Saturday=5, Sunday=6
+      return {
+        frequency: { type: "weekly", interval: 1, weekdays: [5, 6] },
+        raw,
+        isValid: true,
+      };
+    }
+
     // Try to parse daily pattern: "every [N] day[s]"
     const dailyMatch = rest.match(/^(\d+\s+)?days?$/);
     if (dailyMatch) {

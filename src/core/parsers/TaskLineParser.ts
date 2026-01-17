@@ -138,6 +138,8 @@ export class TaskLineParser {
     // Done date: ✅ YYYY-MM-DD
     const doneMatch = content.match(new RegExp(`${EMOJI_SIGNIFIERS.done}\\s*(\\d{4}-\\d{2}-\\d{2})`));
     if (doneMatch) {
+      metadata.doneAt = new Date(doneMatch[1]).toISOString();
+      // Also set lastCompletedAt for backward compatibility
       metadata.lastCompletedAt = new Date(doneMatch[1]).toISOString();
       description = description.replace(doneMatch[0], '');
     }
@@ -147,6 +149,13 @@ export class TaskLineParser {
     if (cancelledMatch) {
       metadata.cancelledAt = new Date(cancelledMatch[1]).toISOString();
       description = description.replace(cancelledMatch[0], '');
+    }
+
+    // OnCompletion: 🏁 keep/delete
+    const onCompletionMatch = content.match(new RegExp(`${EMOJI_SIGNIFIERS.onCompletion}\\s*(keep|delete)`));
+    if (onCompletionMatch) {
+      metadata.onCompletion = onCompletionMatch[1] as 'keep' | 'delete';
+      description = description.replace(onCompletionMatch[0], '');
     }
 
     // Recurrence: 🔁 <rule>
@@ -238,6 +247,8 @@ export class TaskLineParser {
           metadata.createdAt = new Date(value).toISOString();
           break;
         case 'done':
+          metadata.doneAt = new Date(value).toISOString();
+          // Also set lastCompletedAt for backward compatibility
           metadata.lastCompletedAt = new Date(value).toISOString();
           break;
         case 'cancelled':
@@ -245,6 +256,9 @@ export class TaskLineParser {
           break;
         case 'repeat':
           metadata.recurrenceText = value;
+          break;
+        case 'oncompletion':
+          metadata.onCompletion = value as 'keep' | 'delete';
           break;
         case 'priority':
           metadata.priority = value as Task['priority'];

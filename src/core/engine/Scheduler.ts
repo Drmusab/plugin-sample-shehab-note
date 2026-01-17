@@ -2,6 +2,7 @@ import type { Task } from "@/core/models/Task";
 import type { TaskStorage } from "@/core/storage/TaskStorage";
 import { RecurrenceEngine } from "./RecurrenceEngine";
 import { TimezoneHandler } from "./TimezoneHandler";
+import { OnCompletionHandler } from "./OnCompletion";
 import type { SchedulerEventListener, SchedulerEventType, TaskDueEvent } from "./SchedulerEvents";
 import { recordCompletion, recordMiss } from "@/core/models/Task";
 import {
@@ -10,6 +11,7 @@ import {
   LAST_RUN_TIMESTAMP_KEY,
   MAX_RECOVERY_ITERATIONS,
   MISSED_GRACE_PERIOD_MS,
+  SCHEDULER_INTERVAL_MS,
 } from "@/utils/constants";
 import * as logger from "@/utils/logger";
 import type { Plugin } from "siyuan";
@@ -26,6 +28,7 @@ import { SchedulerTimer } from "@/core/engine/SchedulerTimer";
 export class Scheduler {
   private storage: TaskStorage;
   private recurrenceEngine: RecurrenceEngine;
+  private onCompletionHandler: OnCompletionHandler;
   private emittedDue: Set<string> = new Set();
   private emittedMissed: Set<string> = new Set();
   private timezoneHandler: TimezoneHandler;
@@ -49,6 +52,7 @@ export class Scheduler {
   ) {
     this.storage = storage;
     this.recurrenceEngine = new RecurrenceEngine();
+    this.onCompletionHandler = new OnCompletionHandler(plugin);
     this.timezoneHandler = new TimezoneHandler();
     this.plugin = plugin || null;
     this.timer = new SchedulerTimer(intervalMs, () => {
@@ -204,21 +208,51 @@ export class Scheduler {
       throw new Error(`Task not found: ${taskId}`);
     }
 
+    const now = new Date();
+    
+    // Set doneAt date
+    task.doneAt = now.toISOString();
+    
     // Record completion (updates analytics)
     recordCompletion(task);
 
     const completionSnapshot = JSON.parse(JSON.stringify(task));
     await this.storage.archiveTask(completionSnapshot);
 
+    // Execute onCompletion action if specified
+    const onCompletionAction = task.onCompletion || 'keep';
+    const result = await this.onCompletionHandler.execute(task, onCompletionAction);
+    
+    if (!result.success) {
+      logger.error(`OnCompletion action failed for task "${task.name}"`, {
+        taskId: task.id,
+        action: onCompletionAction,
+        error: result.error
+      });
+      // Continue with rescheduling even if deletion failed
+    }
+
+    if (result.warnings) {
+      for (const warning of result.warnings) {
+        logger.warn(warning, { taskId: task.id });
+      }
+    }
+
     // Calculate next occurrence
     const currentDue = new Date(task.dueAt);
     const nextDue = this.recurrenceEngine.calculateNext(
       currentDue,
-      task.frequency
+      task.frequency,
+      {
+        completionDate: now,
+        whenDone: task.whenDone
+      }
     );
 
     // Update task
     task.dueAt = nextDue.toISOString();
+    // Clear doneAt for next occurrence
+    task.doneAt = undefined;
     await this.storage.saveTask(task);
 
     logger.info(`Task "${task.name}" completed and rescheduled to ${nextDue.toISOString()}`);

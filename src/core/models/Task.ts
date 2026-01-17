@@ -117,8 +117,14 @@ export interface Task {
   /** Cancellation timestamp (ISO string) */
   cancelledAt?: string;
 
+  /** Completion timestamp (ISO string) */
+  doneAt?: string;
+
   /** Action to take when task is completed */
   onCompletion?: 'keep' | 'delete';
+
+  /** Calculate next recurrence from completion date instead of due date */
+  whenDone?: boolean;
 
   /** The character in the checkbox for line-based tasks */
   statusSymbol?: string;

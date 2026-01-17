@@ -63,13 +63,18 @@ export class TaskLineSerializer {
       }
 
       // Done
-      if (task.lastCompletedAt && task.status === 'done') {
-        parts.push(`${EMOJI_SIGNIFIERS.done} ${DateParser.toISODateString(new Date(task.lastCompletedAt))}`);
+      if (task.doneAt && task.status === 'done') {
+        parts.push(`${EMOJI_SIGNIFIERS.done} ${DateParser.toISODateString(new Date(task.doneAt))}`);
       }
 
       // Cancelled
       if (task.cancelledAt && task.status === 'cancelled') {
         parts.push(`${EMOJI_SIGNIFIERS.cancelled} ${DateParser.toISODateString(new Date(task.cancelledAt))}`);
+      }
+
+      // OnCompletion
+      if (task.onCompletion) {
+        parts.push(`${EMOJI_SIGNIFIERS.onCompletion} ${task.onCompletion}`);
       }
     } else {
       // Text format [field:: value]
@@ -97,11 +102,14 @@ export class TaskLineSerializer {
       if (task.dueAt) {
         parts.push(`[due:: ${DateParser.toISODateString(new Date(task.dueAt))}]`);
       }
-      if (task.lastCompletedAt && task.status === 'done') {
-        parts.push(`[done:: ${DateParser.toISODateString(new Date(task.lastCompletedAt))}]`);
+      if (task.doneAt && task.status === 'done') {
+        parts.push(`[done:: ${DateParser.toISODateString(new Date(task.doneAt))}]`);
       }
       if (task.cancelledAt && task.status === 'cancelled') {
         parts.push(`[cancelled:: ${DateParser.toISODateString(new Date(task.cancelledAt))}]`);
+      }
+      if (task.onCompletion) {
+        parts.push(`[onCompletion:: ${task.onCompletion}]`);
       }
     }
 

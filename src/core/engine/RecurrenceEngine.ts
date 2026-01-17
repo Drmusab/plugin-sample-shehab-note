@@ -43,37 +43,47 @@ export class RecurrenceEngine {
    * Calculate the next occurrence date based on frequency
    * @param currentDue Current due date
    * @param frequency Recurrence rule
+   * @param options Optional configuration (completionDate for "when done", whenDone flag)
    * @returns Next occurrence date
    */
-  calculateNext(currentDue: Date, frequency: Frequency): Date {
+  calculateNext(
+    currentDue: Date, 
+    frequency: Frequency,
+    options?: { completionDate?: Date; whenDone?: boolean }
+  ): Date {
+    // If whenDone is true and completionDate provided, calculate from completion date
+    const baseDate = (options?.whenDone && options?.completionDate) 
+      ? options.completionDate 
+      : currentDue;
+
     const { type, time } = frequency;
     const interval = this.normalizeInterval(frequency.interval);
     let nextDate: Date;
 
     switch (type) {
       case "daily":
-        nextDate = this.calculateNextDaily(currentDue, interval);
+        nextDate = this.calculateNextDaily(baseDate, interval);
         break;
       case "weekly":
         nextDate = this.calculateNextWeekly(
-          currentDue,
+          baseDate,
           interval,
           this.normalizeWeekdays(frequency.weekdays)
         );
         break;
       case "monthly":
         nextDate = this.calculateNextMonthly(
-          currentDue,
+          baseDate,
           interval,
-          this.normalizeDayOfMonth(frequency.dayOfMonth, currentDue.getDate())
+          this.normalizeDayOfMonth(frequency.dayOfMonth, baseDate.getDate())
         );
         break;
       case "yearly":
         nextDate = this.calculateNextYearly(
-          currentDue,
+          baseDate,
           interval,
-          this.normalizeMonth(frequency.month, currentDue.getMonth()),
-          this.normalizeDayOfMonth(frequency.dayOfMonth, currentDue.getDate())
+          this.normalizeMonth(frequency.month, baseDate.getMonth()),
+          this.normalizeDayOfMonth(frequency.dayOfMonth, baseDate.getDate())
         );
         break;
       default:
