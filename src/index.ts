@@ -67,7 +67,7 @@ export default class RecurringTasksPlugin extends Plugin {
     }
 
     // Register slash commands and hotkeys
-    registerCommands(this, this.repository);
+    registerCommands(this, this.repository, this.scheduler.getRecurrenceEngine());
 
     // Register block context menu
     registerBlockMenu(this);

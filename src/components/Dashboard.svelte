@@ -18,6 +18,11 @@
   import AllTasksTab from "./tabs/AllTasksTab.svelte";
   import TimelineTab from "./tabs/TimelineTab.svelte";
   import AnalyticsTab from "./tabs/AnalyticsTab.svelte";
+  import InboxTab from "./tabs/InboxTab.svelte";
+  import UpcomingTab from "./tabs/UpcomingTab.svelte";
+  import DoneTab from "./tabs/DoneTab.svelte";
+  import ProjectsTab from "./tabs/ProjectsTab.svelte";
+  import SearchTab from "./tabs/SearchTab.svelte";
   import TaskEditorModal from "./TaskEditorModal.svelte";
   import Settings from "./settings/Settings.svelte";
 
@@ -34,21 +39,106 @@
   const timezoneHandler = scheduler.getTimezoneHandler();
   const recurrenceEngine = scheduler.getRecurrenceEngine();
 
-  let activeTab = $state<"today" | "all" | "timeline" | "analytics">("today");
+  type TabType = "inbox" | "today" | "upcoming" | "done" | "projects" | "search" | "all" | "timeline" | "analytics";
+  let activeTab = $state<TabType>("today");
   let showTaskForm = $state(false);
   let showSettings = $state(false);
   let editingTask = $state<Task | undefined>(undefined);
+  let quickFilters = $state<Set<string>>(new Set());
   /**
    * Dashboard task state (single UI source of truth).
    * Storage is only used for initial hydration or explicit reloads.
    */
   let allTasks = $state<Task[]>([]);
   let todayTasks = $derived(getTodayAndOverdueTasks(allTasks));
+  let isRefreshing = $state(false);
+
+  // Apply quick filters
+  const filteredTasks = $derived(() => {
+    let tasks = allTasks;
+    
+    if (quickFilters.has("notDone")) {
+      tasks = tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
+    }
+    if (quickFilters.has("dueToday")) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tasks = tasks.filter((t) => {
+        if (!t.dueAt) return false;
+        const due = new Date(t.dueAt);
+        return due >= today && due < tomorrow;
+      });
+    }
+    if (quickFilters.has("overdue")) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      tasks = tasks.filter((t) => {
+        if (!t.dueAt || t.status === "done" || t.status === "cancelled") return false;
+        const due = new Date(t.dueAt);
+        return due < today;
+      });
+    }
+    if (quickFilters.has("inProgress")) {
+      tasks = tasks.filter((t) => t.status === "todo" && t.statusSymbol && t.statusSymbol !== " ");
+    }
+    if (quickFilters.has("blocked")) {
+      tasks = tasks.filter((t) => t.blockedBy && t.blockedBy.length > 0);
+    }
+    if (quickFilters.has("highPriority")) {
+      tasks = tasks.filter((t) => t.priority === "high" || t.priority === "urgent");
+    }
+    
+    return tasks;
+  });
+
+  // Task counts for tab badges
+  const inboxCount = $derived(
+    allTasks.filter(
+      (t) =>
+        t.status !== "done" &&
+        t.status !== "cancelled" &&
+        !t.dueAt &&
+        !t.scheduledAt &&
+        !t.startAt
+    ).length
+  );
+
+  const upcomingCount = $derived(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const futureDate = new Date(today);
+    futureDate.setDate(futureDate.getDate() + 7);
+    return allTasks.filter((t) => {
+      if (t.status === "done" || t.status === "cancelled" || !t.dueAt) return false;
+      const due = new Date(t.dueAt);
+      due.setHours(0, 0, 0, 0);
+      return due > today && due <= futureDate;
+    }).length;
+  });
+
+  const doneCount = $derived(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    cutoff.setHours(0, 0, 0, 0);
+    return allTasks.filter((t) => {
+      if (t.status !== "done" || !t.doneAt) return false;
+      const done = new Date(t.doneAt);
+      return done >= cutoff;
+    }).length;
+  });
+
+  const projectsCount = $derived(
+    allTasks.filter((t) => t.status !== "done" && t.status !== "cancelled").length
+  );
 
   // Refresh tasks from storage (initial load / explicit reloads only)
   function loadTasksFromStorage(reason: "initial" | "reload" | "external" = "initial") {
+    isRefreshing = true;
     // Shallow copy keeps UI state decoupled from storage while avoiding deep clones.
     allTasks = repository.getAllTasks().map((task) => ({ ...task }));
+    isRefreshing = false;
     if (reason !== "initial") {
       toast.info("Task list reloaded");
     }
@@ -281,14 +371,50 @@
       loadTasksFromStorage("external");
     }
   }
+
+  function toggleQuickFilter(filterId: string) {
+    const newFilters = new Set(quickFilters);
+    if (newFilters.has(filterId)) {
+      newFilters.delete(filterId);
+    } else {
+      newFilters.add(filterId);
+    }
+    quickFilters = newFilters;
+  }
+
+  async function handleUncompleteTask(task: Task) {
+    const updatedTask = {
+      ...task,
+      status: "todo" as const,
+      doneAt: undefined,
+    };
+    allTasks = upsertTask(allTasks, updatedTask);
+    toast.success(`Task "${task.name}" marked as not done`);
+    
+    void repository.saveTask(updatedTask).catch((err) => {
+      toast.error("Failed to update task: " + err);
+      loadTasksFromStorage("external");
+    });
+  }
+
 </script>
 
 <div class="dashboard">
   <div class="dashboard__header">
     <h1 class="dashboard__title">Recurring Tasks</h1>
-    <button class="dashboard__settings-btn" onclick={handleOpenSettings}>
-      ⚙️ Settings
-    </button>
+    <div class="dashboard__header-actions">
+      <button
+        class="dashboard__refresh-btn"
+        onclick={() => loadTasksFromStorage("reload")}
+        disabled={isRefreshing}
+        title="Refresh tasks"
+      >
+        {isRefreshing ? "⟳" : "↻"}
+      </button>
+      <button class="dashboard__settings-btn" onclick={handleOpenSettings}>
+        ⚙️ Settings
+      </button>
+    </div>
   </div>
 
   {#if showSettings}
@@ -302,48 +428,155 @@
   {:else}
     <div class="dashboard__tabs">
       <button
+        class="dashboard__tab {activeTab === 'inbox' ? 'active' : ''}"
+        onclick={() => (activeTab = "inbox")}
+      >
+        📥 Inbox
+        {#if inboxCount > 0}
+          <span class="dashboard__tab-badge">{inboxCount}</span>
+        {/if}
+      </button>
+      <button
         class="dashboard__tab {activeTab === 'today' ? 'active' : ''}"
         onclick={() => (activeTab = "today")}
       >
-        📋 Today & Overdue
+        📋 Today
         {#if todayTasks.length > 0}
           <span class="dashboard__tab-badge">{todayTasks.length}</span>
         {/if}
       </button>
       <button
+        class="dashboard__tab {activeTab === 'upcoming' ? 'active' : ''}"
+        onclick={() => (activeTab = "upcoming")}
+      >
+        📅 Upcoming
+        {#if upcomingCount > 0}
+          <span class="dashboard__tab-badge">{upcomingCount}</span>
+        {/if}
+      </button>
+      <button
+        class="dashboard__tab {activeTab === 'done' ? 'active' : ''}"
+        onclick={() => (activeTab = "done")}
+      >
+        ✅ Done
+        {#if doneCount > 0}
+          <span class="dashboard__tab-badge">{doneCount}</span>
+        {/if}
+      </button>
+      <button
+        class="dashboard__tab {activeTab === 'projects' ? 'active' : ''}"
+        onclick={() => (activeTab = "projects")}
+      >
+        📁 Projects
+        {#if projectsCount > 0}
+          <span class="dashboard__tab-badge">{projectsCount}</span>
+        {/if}
+      </button>
+      <button
+        class="dashboard__tab {activeTab === 'search' ? 'active' : ''}"
+        onclick={() => (activeTab = "search")}
+      >
+        🔍 Search
+      </button>
+      <button
         class="dashboard__tab {activeTab === 'all' ? 'active' : ''}"
         onclick={() => (activeTab = "all")}
       >
-        📝 All Tasks
+        📝 All
         <span class="dashboard__tab-badge">{allTasks.length}</span>
-      </button>
-      <button
-        class="dashboard__tab {activeTab === 'timeline' ? 'active' : ''}"
-        onclick={() => (activeTab = "timeline")}
-      >
-        📅 Timeline
-      </button>
-      <button
-        class="dashboard__tab {activeTab === 'analytics' ? 'active' : ''}"
-        onclick={() => (activeTab = "analytics")}
-      >
-        📊 Analytics
       </button>
     </div>
 
+    {#if activeTab !== "search" && activeTab !== "timeline" && activeTab !== "analytics"}
+      <div class="dashboard__filters">
+        <span class="dashboard__filters-label">Quick Filters:</span>
+        <button
+          class="dashboard__filter-btn {quickFilters.has('notDone') ? 'active' : ''}"
+          onclick={() => toggleQuickFilter('notDone')}
+        >
+          Not Done
+        </button>
+        <button
+          class="dashboard__filter-btn {quickFilters.has('dueToday') ? 'active' : ''}"
+          onclick={() => toggleQuickFilter('dueToday')}
+        >
+          Due Today
+        </button>
+        <button
+          class="dashboard__filter-btn {quickFilters.has('overdue') ? 'active' : ''}"
+          onclick={() => toggleQuickFilter('overdue')}
+        >
+          Overdue
+        </button>
+        <button
+          class="dashboard__filter-btn {quickFilters.has('inProgress') ? 'active' : ''}"
+          onclick={() => toggleQuickFilter('inProgress')}
+        >
+          In Progress
+        </button>
+        <button
+          class="dashboard__filter-btn {quickFilters.has('blocked') ? 'active' : ''}"
+          onclick={() => toggleQuickFilter('blocked')}
+        >
+          Blocked
+        </button>
+        <button
+          class="dashboard__filter-btn {quickFilters.has('highPriority') ? 'active' : ''}"
+          onclick={() => toggleQuickFilter('highPriority')}
+        >
+          High Priority
+        </button>
+      </div>
+    {/if}
+
     <div class="dashboard__content">
-      {#if activeTab === "today"}
+      {#if activeTab === "inbox"}
+        <InboxTab
+          tasks={quickFilters.size > 0 ? filteredTasks : allTasks}
+          onEdit={handleEditTask}
+          onDone={handleTaskDone}
+          onDelete={handleDeleteTask}
+        />
+      {:else if activeTab === "today"}
         <TodayTab
-          tasks={todayTasks}
+          tasks={quickFilters.size > 0 ? filteredTasks.filter(t => todayTasks.some(tt => tt.id === t.id)) : todayTasks}
           onDone={handleTaskDone}
           onDelay={handleTaskDelay}
           onSkip={handleTaskSkip}
           onEdit={handleEditTask}
           {timezoneHandler}
         />
+      {:else if activeTab === "upcoming"}
+        <UpcomingTab
+          tasks={quickFilters.size > 0 ? filteredTasks : allTasks}
+          onEdit={handleEditTask}
+          onDone={handleTaskDone}
+          onDelete={handleDeleteTask}
+        />
+      {:else if activeTab === "done"}
+        <DoneTab
+          tasks={quickFilters.size > 0 ? filteredTasks : allTasks}
+          onEdit={handleEditTask}
+          onDelete={handleDeleteTask}
+          onUncomplete={handleUncompleteTask}
+        />
+      {:else if activeTab === "projects"}
+        <ProjectsTab
+          tasks={quickFilters.size > 0 ? filteredTasks : allTasks}
+          onEdit={handleEditTask}
+          onDone={handleTaskDone}
+          onDelete={handleDeleteTask}
+        />
+      {:else if activeTab === "search"}
+        <SearchTab
+          tasks={allTasks}
+          onEdit={handleEditTask}
+          onDone={handleTaskDone}
+          onDelete={handleDeleteTask}
+        />
       {:else if activeTab === "all"}
         <AllTasksTab
-          tasks={allTasks}
+          tasks={quickFilters.size > 0 ? filteredTasks : allTasks}
           onEdit={handleEditTask}
           onDelete={handleDeleteTask}
           onDuplicate={handleDuplicateTask}
@@ -387,6 +620,38 @@
     font-size: 18px;
     font-weight: 600;
     color: var(--b3-theme-on-surface);
+  }
+
+  .dashboard__header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .dashboard__refresh-btn {
+    padding: 8px 12px;
+    background: var(--b3-theme-surface-lighter);
+    color: var(--b3-theme-on-surface);
+    border: 1px solid var(--b3-border-color);
+    border-radius: 6px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .dashboard__refresh-btn:hover:not(:disabled) {
+    background: var(--b3-theme-surface-light);
+  }
+
+  .dashboard__refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 
   .dashboard__settings-btn {
@@ -449,6 +714,44 @@
     border-radius: 10px;
     font-size: 11px;
     font-weight: 600;
+  }
+
+  .dashboard__filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--b3-theme-surface);
+    border-bottom: 1px solid var(--b3-border-color);
+    flex-wrap: wrap;
+  }
+
+  .dashboard__filters-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--b3-theme-on-surface-light);
+    margin-right: 8px;
+  }
+
+  .dashboard__filter-btn {
+    padding: 6px 12px;
+    background: var(--b3-theme-surface-lighter);
+    color: var(--b3-theme-on-surface);
+    border: 1px solid var(--b3-border-color);
+    border-radius: 16px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .dashboard__filter-btn:hover {
+    background: var(--b3-theme-surface-light);
+  }
+
+  .dashboard__filter-btn.active {
+    background: var(--b3-theme-primary);
+    color: white;
+    border-color: var(--b3-theme-primary);
   }
 
   .dashboard__content {
