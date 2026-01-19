@@ -43,3 +43,18 @@ export class IsBlockingFilter extends Filter {
     return this.negate ? !result : result;
   }
 }
+
+/**
+ * Filter: "dependsOn includes <taskId>"
+ * Returns tasks that depend on a specific task
+ */
+export class DependsOnFilter extends Filter {
+  constructor(private targetTaskId: string, private negate = false) {
+    super();
+  }
+
+  matches(task: Task): boolean {
+    const hasDependency = task.dependsOn && task.dependsOn.includes(this.targetTaskId);
+    return this.negate ? !hasDependency : !!hasDependency;
+  }
+}

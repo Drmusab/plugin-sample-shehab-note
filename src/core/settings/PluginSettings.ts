@@ -1,6 +1,9 @@
 /**
- * Plugin settings for Phase 2 features
+ * Plugin settings for Phase 2+ features
  */
+
+import type { FilenameDateConfig } from './FilenameDate';
+import type { GlobalFilterConfig } from './GlobalFilter';
 
 /**
  * Date tracking settings
@@ -31,6 +34,17 @@ export interface RecurrenceSettings {
 }
 
 /**
+ * Dependency settings (Phase 5)
+ */
+export interface DependencySettings {
+  /** Warn when circular dependencies detected */
+  warnOnCycles: boolean;
+  
+  /** Validate dependencies on save */
+  autoValidate: boolean;
+}
+
+/**
  * Complete plugin settings
  */
 export interface PluginSettings {
@@ -39,6 +53,15 @@ export interface PluginSettings {
   
   /** Recurrence configuration */
   recurrence: RecurrenceSettings;
+  
+  /** Dependency configuration (Phase 5) */
+  dependencies: DependencySettings;
+  
+  /** Filename-based date extraction (Phase 5) */
+  filenameDate: FilenameDateConfig;
+  
+  /** Global task filter (Phase 5) */
+  globalFilter: GlobalFilterConfig;
 }
 
 /**
@@ -55,6 +78,23 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     removeScheduledOnRecurrence: false,
     preserveOriginalTime: true,
   },
+  dependencies: {
+    warnOnCycles: true,
+    autoValidate: true,
+  },
+  filenameDate: {
+    enabled: false,
+    patterns: ['YYYY-MM-DD', 'YYYYMMDD'],
+    folders: ['daily/', 'journal/'],
+    targetField: 'scheduled',
+  },
+  globalFilter: {
+    enabled: false,
+    mode: 'include',
+    tagPattern: undefined,
+    pathPattern: undefined,
+    regex: undefined,
+  },
 };
 
 /**
@@ -69,6 +109,18 @@ export function mergeSettings(userSettings: Partial<PluginSettings>): PluginSett
     recurrence: {
       ...DEFAULT_SETTINGS.recurrence,
       ...userSettings.recurrence,
+    },
+    dependencies: {
+      ...DEFAULT_SETTINGS.dependencies,
+      ...userSettings.dependencies,
+    },
+    filenameDate: {
+      ...DEFAULT_SETTINGS.filenameDate,
+      ...userSettings.filenameDate,
+    },
+    globalFilter: {
+      ...DEFAULT_SETTINGS.globalFilter,
+      ...userSettings.globalFilter,
     },
   };
 }
