@@ -7,6 +7,14 @@ import type { Task } from "@/core/models/Task";
 import { CURRENT_SCHEMA_VERSION } from "@/utils/constants";
 import * as logger from "@/utils/logger";
 
+export interface MigrationResult {
+  migrated: boolean;
+  tasksAffected: number;
+  fromVersion?: number;
+  toVersion: number;
+  backupKey?: string;
+}
+
 export class MigrationManager {
   private plugin: Plugin;
 
@@ -24,14 +32,18 @@ export class MigrationManager {
   /**
    * Create a backup before migration
    */
-  async createBackup(storageKey: string): Promise<void> {
+  async createBackup(storageKey: string, version?: number): Promise<string> {
     try {
       const data = await this.plugin.loadData(storageKey);
       if (data) {
-        const backupKey = `${storageKey}-backup-${Date.now()}`;
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const versionStr = version !== undefined ? `v${version}` : 'unknown';
+        const backupKey = `${storageKey}-backup-${versionStr}-${timestamp}`;
         await this.plugin.saveData(backupKey, data);
         logger.info(`Created backup: ${backupKey}`);
+        return backupKey;
       }
+      throw new Error("No data to backup");
     } catch (err) {
       logger.error("Failed to create backup", err);
       throw err;
@@ -41,21 +53,32 @@ export class MigrationManager {
   /**
    * Run all pending migrations
    */
-  async migrate(storageKey: string): Promise<void> {
+  async migrate(storageKey: string): Promise<MigrationResult> {
     try {
       const data = await this.plugin.loadData(storageKey);
       if (!data) {
         logger.info("No data to migrate");
-        return;
+        return {
+          migrated: false,
+          tasksAffected: 0,
+          toVersion: CURRENT_SCHEMA_VERSION,
+        };
       }
 
       const tasks: Task[] = Array.isArray(data) ? data : Array.isArray(data.tasks) ? data.tasks : [];
       if (tasks.length === 0) {
         logger.info("No data to migrate");
-        return;
+        return {
+          migrated: false,
+          tasksAffected: 0,
+          toVersion: CURRENT_SCHEMA_VERSION,
+        };
       }
 
       let migrated = false;
+      let backupKey: string | undefined;
+      let fromVersion: number | undefined;
+      let tasksAffected = 0;
 
       for (let i = 0; i < tasks.length; i++) {
         const task = tasks[i];
@@ -64,11 +87,13 @@ export class MigrationManager {
         if (originalVersion < CURRENT_SCHEMA_VERSION) {
           // Create backup before first migration
           if (!migrated) {
-            await this.createBackup(storageKey);
+            fromVersion = originalVersion;
+            backupKey = await this.createBackup(storageKey, originalVersion);
             migrated = true;
           }
 
           tasks[i] = this.migrateTask(task, originalVersion);
+          tasksAffected++;
           logger.info(`Migrated task ${task.id} from v${originalVersion} to v${CURRENT_SCHEMA_VERSION}`);
         }
       }
@@ -76,9 +101,22 @@ export class MigrationManager {
       if (migrated) {
         const payload = Array.isArray(data) ? tasks : { ...data, tasks };
         await this.plugin.saveData(storageKey, payload);
-        logger.info(`Migration complete: ${tasks.length} tasks processed`);
+        logger.info(`Migration complete: ${tasksAffected} tasks migrated`);
+        
+        return {
+          migrated: true,
+          tasksAffected,
+          fromVersion,
+          toVersion: CURRENT_SCHEMA_VERSION,
+          backupKey,
+        };
       } else {
         logger.info("No migration needed - all tasks up to date");
+        return {
+          migrated: false,
+          tasksAffected: 0,
+          toVersion: CURRENT_SCHEMA_VERSION,
+        };
       }
     } catch (err) {
       logger.error("Migration failed", err);
@@ -128,6 +166,17 @@ export class MigrationManager {
         linkedBlockContent: migrated.linkedBlockContent || undefined,
         category: migrated.category || undefined,
         description: migrated.description || undefined,
+      };
+    }
+
+    // v3 -> v4: Add onCompletion field for recurring tasks
+    if (fromVersion < 4) {
+      migrated = {
+        ...migrated,
+        version: 4,
+        onCompletion: (migrated as any).onCompletion || 'keep',
+        dependsOn: (migrated as any).dependsOn || [],
+        blockedBy: (migrated as any).blockedBy || [],
       };
     }
 

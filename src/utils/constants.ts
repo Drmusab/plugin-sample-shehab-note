@@ -28,7 +28,7 @@ export const EMITTED_OCCURRENCES_KEY = "scheduler-emitted-occurrences";
 /**
  * Schema version for data migrations
  */
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 /**
  * Default n8n event configuration

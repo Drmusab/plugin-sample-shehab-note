@@ -72,6 +72,38 @@ export class TaskStorage implements TaskStorageProvider {
   }
 
   /**
+   * Load active tasks with batch processing and progress callbacks
+   */
+  async loadActiveTasks(
+    batchSize: number = 1000,
+    progressCallback?: (loaded: number, total: number) => void
+  ): Promise<Task[]> {
+    const taskMap = await this.activeStore.loadActive();
+    const allTasks = Array.from(taskMap.values());
+    const total = allTasks.length;
+    
+    if (total === 0) {
+      return [];
+    }
+
+    const result: Task[] = [];
+
+    for (let i = 0; i < total; i += batchSize) {
+      const batch = allTasks.slice(i, Math.min(i + batchSize, total));
+      result.push(...batch);
+
+      if (progressCallback) {
+        progressCallback(result.length, total);
+      }
+
+      // Yield to UI thread
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
+    return result;
+  }
+
+  /**
    * Rebuild the block index from existing tasks
    */
   private rebuildBlockIndex(): void {
