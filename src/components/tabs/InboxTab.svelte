@@ -66,7 +66,7 @@
     </p>
   </div>
 
-  <div class="inbox-tab__content">
+  <div class="inbox-tab__content" role="list" aria-label="Inbox tasks">
     {#if inboxTasks.length === 0}
       <div class="inbox-tab__empty">
         <p>📥 No tasks in inbox</p>
@@ -78,6 +78,7 @@
       {#each inboxTasks as task, index (task.id)}
         <div
           class="inbox-tab__card-wrapper"
+          role="listitem"
           tabindex={index === focusedIndex ? 0 : -1}
           bind:this={cardRefs[index]}
           onkeydown={(event) => handleCardKeydown(event, index)}

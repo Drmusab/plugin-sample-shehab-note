@@ -20,9 +20,13 @@
   }
 
   let { repository, onClose, prefill, onAdvanced }: Props = $props();
+  const repositoryRef = $derived(repository);
+  const closeHandler = $derived(onClose);
+  const prefillData = $derived(prefill);
+  const advancedHandler = $derived(onAdvanced);
 
   // Initialize with prefill value - it's used once at component creation
-  let name = $state(prefill?.suggestedName ?? "");
+  let name = $state(prefillData?.suggestedName ?? "");
   let dueAt = $state(new Date().toISOString().slice(0, 16));
   let touched = $state({ name: false, dueAt: false });
   let isSaving = $state(false);
@@ -39,9 +43,9 @@
   const hasErrors = $derived(!!(nameError || dueAtError));
 
   onMount(() => {
-    if (prefill?.suggestedTime) {
+    if (prefillData?.suggestedTime) {
       const now = new Date();
-      const [hours, minutes] = prefill.suggestedTime.split(":").map(Number);
+      const [hours, minutes] = prefillData.suggestedTime.split(":").map(Number);
       now.setHours(hours, minutes, 0, 0);
       dueAt = now.toISOString().slice(0, 16);
     }
@@ -66,15 +70,15 @@
     }
 
     const task = createTask(name.trim(), frequency, new Date(dueAt));
-    task.linkedBlockId = prefill?.linkedBlockId || undefined;
-    task.linkedBlockContent = prefill?.linkedBlockContent || undefined;
+    task.linkedBlockId = prefillData?.linkedBlockId || undefined;
+    task.linkedBlockContent = prefillData?.linkedBlockContent || undefined;
 
     isSaving = true;
     try {
-      await repository.saveTask(task);
+      await repositoryRef.saveTask(task);
       toast.success(`Task "${task.name}" created`);
       window.dispatchEvent(new CustomEvent("recurring-task-refresh"));
-      onClose();
+      closeHandler();
     } catch (err) {
       toast.error("Failed to create task: " + err);
     } finally {
@@ -84,7 +88,7 @@
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === "Escape") {
-      onClose();
+      closeHandler();
     }
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault();
@@ -97,7 +101,7 @@
   <div class="quick-add-card" role="document">
     <div class="quick-add-card__header">
       <h2 id="quick-add-title">Quick Add</h2>
-      <button class="quick-add-card__close" type="button" onclick={onClose} aria-label="Close">
+      <button class="quick-add-card__close" type="button" onclick={closeHandler} aria-label="Close">
         ✕
       </button>
     </div>
@@ -134,18 +138,18 @@
       {/if}
     </div>
 
-    {#if prefill?.linkedBlockId}
+    {#if prefillData?.linkedBlockId}
       <div class="quick-add-card__linked">
-        Linked block: <span>{prefill.linkedBlockId}</span>
+        Linked block: <span>{prefillData.linkedBlockId}</span>
       </div>
     {/if}
 
     <div class="quick-add-card__actions">
-      <button class="quick-add-card__cancel" type="button" onclick={onClose}>
+      <button class="quick-add-card__cancel" type="button" onclick={closeHandler}>
         Cancel
       </button>
-      {#if onAdvanced}
-        <button class="quick-add-card__advanced" type="button" onclick={onAdvanced}>
+      {#if advancedHandler}
+        <button class="quick-add-card__advanced" type="button" onclick={advancedHandler}>
           Advanced...
         </button>
       {/if}

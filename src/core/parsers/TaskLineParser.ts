@@ -1,7 +1,8 @@
 import type { Task } from '@/core/models/Task';
 import { Status, StatusType } from '@/core/models/Status';
 import { StatusRegistry } from '@/core/models/StatusRegistry';
-import { EMOJI_SIGNIFIERS, getPriorityFromEmoji, type TaskFormat } from '@/utils/signifiers';
+import { EMOJI_SIGNIFIERS, type TaskFormat } from '@/utils/signifiers';
+import { DateParser } from '@/core/parsers/DateParser';
 
 export interface ParsedTaskLine {
   task: Partial<Task> | null;
@@ -72,6 +73,9 @@ export class TaskLineParser {
     }
 
     task.name = content.trim();
+    if (unknownFields.length > 0) {
+      task.unknownFields = unknownFields;
+    }
 
     return {
       task,
@@ -107,59 +111,6 @@ export class TaskLineParser {
     const unknownFields: string[] = [];
     let description = content;
 
-    // Due date: 📅 YYYY-MM-DD
-    const dueMatch = content.match(new RegExp(`${EMOJI_SIGNIFIERS.due}\\s*(\\d{4}-\\d{2}-\\d{2})`));
-    if (dueMatch) {
-      metadata.dueAt = new Date(dueMatch[1]).toISOString();
-      description = description.replace(dueMatch[0], '');
-    }
-
-    // Scheduled date: ⏳ YYYY-MM-DD
-    const scheduledMatch = content.match(new RegExp(`${EMOJI_SIGNIFIERS.scheduled}\\s*(\\d{4}-\\d{2}-\\d{2})`));
-    if (scheduledMatch) {
-      metadata.scheduledAt = new Date(scheduledMatch[1]).toISOString();
-      description = description.replace(scheduledMatch[0], '');
-    }
-
-    // Start date: 🛫 YYYY-MM-DD
-    const startMatch = content.match(new RegExp(`${EMOJI_SIGNIFIERS.start}\\s*(\\d{4}-\\d{2}-\\d{2})`));
-    if (startMatch) {
-      metadata.startAt = new Date(startMatch[1]).toISOString();
-      description = description.replace(startMatch[0], '');
-    }
-
-    // Created date: ➕ YYYY-MM-DD
-    const createdMatch = content.match(new RegExp(`${EMOJI_SIGNIFIERS.created}\\s*(\\d{4}-\\d{2}-\\d{2})`));
-    if (createdMatch) {
-      metadata.createdAt = new Date(createdMatch[1]).toISOString();
-      description = description.replace(createdMatch[0], '');
-    }
-
-    // Done date: ✅ YYYY-MM-DD
-    const doneMatch = content.match(new RegExp(`${EMOJI_SIGNIFIERS.done}\\s*(\\d{4}-\\d{2}-\\d{2})`));
-    if (doneMatch) {
-      metadata.doneAt = new Date(doneMatch[1]).toISOString();
-      // Also set lastCompletedAt for backward compatibility
-      metadata.lastCompletedAt = new Date(doneMatch[1]).toISOString();
-      description = description.replace(doneMatch[0], '');
-    }
-
-    // Cancelled date: ❌ YYYY-MM-DD
-    const cancelledMatch = content.match(new RegExp(`${EMOJI_SIGNIFIERS.cancelled}\\s*(\\d{4}-\\d{2}-\\d{2})`));
-    if (cancelledMatch) {
-      metadata.cancelledAt = new Date(cancelledMatch[1]).toISOString();
-      description = description.replace(cancelledMatch[0], '');
-    }
-
-    // OnCompletion: 🏁 keep/delete
-    const onCompletionMatch = content.match(new RegExp(`${EMOJI_SIGNIFIERS.onCompletion}\\s*(keep|delete)`));
-    if (onCompletionMatch) {
-      metadata.onCompletion = onCompletionMatch[1] as 'keep' | 'delete';
-      description = description.replace(onCompletionMatch[0], '');
-    }
-
-    // Recurrence: 🔁 <rule>
-    // Match until we hit another emoji signifier or tag
     const allEmojis = [
       EMOJI_SIGNIFIERS.due,
       EMOJI_SIGNIFIERS.scheduled,
@@ -170,10 +121,61 @@ export class TaskLineParser {
       EMOJI_SIGNIFIERS.id,
       EMOJI_SIGNIFIERS.dependsOn,
       EMOJI_SIGNIFIERS.onCompletion,
+      EMOJI_SIGNIFIERS.recurrence,
       ...Object.values(EMOJI_SIGNIFIERS.priority),
     ];
-    const emojiPattern = allEmojis.map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    const recurrenceMatch = content.match(new RegExp(`${EMOJI_SIGNIFIERS.recurrence}\\s*([^${emojiPattern}#]+)`));
+    const emojiPattern = allEmojis
+      .map((emoji) => emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|');
+
+    type DateField = "dueAt" | "scheduledAt" | "startAt" | "createdAt" | "doneAt" | "cancelledAt";
+    const parseDateField = (signifier: string, field: DateField, setCompletion = false) => {
+      const match = content.match(
+        new RegExp(`${signifier}\\s*([^\\s].*?)(?=\\s(?:${emojiPattern}|#)|$)`)
+      );
+      if (!match) return;
+      const parsed = DateParser.parse(match[1].trim());
+      if (parsed.isValid && parsed.date) {
+        metadata[field] = parsed.date.toISOString();
+        if (setCompletion) {
+          metadata.lastCompletedAt = parsed.date.toISOString();
+        }
+      } else {
+        unknownFields.push(match[0]);
+      }
+      description = description.replace(match[0], '');
+    };
+
+    // Due date: 📅 <date>
+    parseDateField(EMOJI_SIGNIFIERS.due, "dueAt");
+
+    // Scheduled date: ⏳ <date>
+    parseDateField(EMOJI_SIGNIFIERS.scheduled, "scheduledAt");
+
+    // Start date: 🛫 <date>
+    parseDateField(EMOJI_SIGNIFIERS.start, "startAt");
+
+    // Created date: ➕ <date>
+    parseDateField(EMOJI_SIGNIFIERS.created, "createdAt");
+
+    // Done date: ✅ <date>
+    parseDateField(EMOJI_SIGNIFIERS.done, "doneAt", true);
+
+    // Cancelled date: ❌ <date>
+    parseDateField(EMOJI_SIGNIFIERS.cancelled, "cancelledAt");
+
+    // OnCompletion: 🏁 keep/delete
+    const onCompletionMatch = content.match(new RegExp(`${EMOJI_SIGNIFIERS.onCompletion}\\s*(keep|delete)`));
+    if (onCompletionMatch) {
+      metadata.onCompletion = onCompletionMatch[1] as 'keep' | 'delete';
+      description = description.replace(onCompletionMatch[0], '');
+    }
+
+    // Recurrence: 🔁 <rule>
+    // Match until we hit another emoji signifier or tag
+    const recurrenceMatch = content.match(
+      new RegExp(`${EMOJI_SIGNIFIERS.recurrence}\\s*([^\\s].*?)(?=\\s(?:${emojiPattern}|#)|$)`)
+    );
     if (recurrenceMatch) {
       metadata.recurrenceText = recurrenceMatch[1].trim();
       description = description.replace(recurrenceMatch[0], '');
@@ -233,26 +235,40 @@ export class TaskLineParser {
       const key = match[1].toLowerCase();
       const value = match[2].trim();
       
+      const parseDateValue = (valueToParse: string) => {
+        const parsed = DateParser.parse(valueToParse);
+        return parsed.isValid && parsed.date ? parsed.date.toISOString() : null;
+      };
+
       switch (key) {
         case 'due':
-          metadata.dueAt = new Date(value).toISOString();
+          metadata.dueAt = parseDateValue(value) ?? undefined;
+          if (!metadata.dueAt) unknownFields.push(match[0]);
           break;
         case 'scheduled':
-          metadata.scheduledAt = new Date(value).toISOString();
+          metadata.scheduledAt = parseDateValue(value) ?? undefined;
+          if (!metadata.scheduledAt) unknownFields.push(match[0]);
           break;
         case 'start':
-          metadata.startAt = new Date(value).toISOString();
+          metadata.startAt = parseDateValue(value) ?? undefined;
+          if (!metadata.startAt) unknownFields.push(match[0]);
           break;
         case 'created':
-          metadata.createdAt = new Date(value).toISOString();
+          metadata.createdAt = parseDateValue(value) ?? undefined;
+          if (!metadata.createdAt) unknownFields.push(match[0]);
           break;
         case 'done':
-          metadata.doneAt = new Date(value).toISOString();
-          // Also set lastCompletedAt for backward compatibility
-          metadata.lastCompletedAt = new Date(value).toISOString();
+          metadata.doneAt = parseDateValue(value) ?? undefined;
+          if (metadata.doneAt) {
+            // Also set lastCompletedAt for backward compatibility
+            metadata.lastCompletedAt = metadata.doneAt;
+          } else {
+            unknownFields.push(match[0]);
+          }
           break;
         case 'cancelled':
-          metadata.cancelledAt = new Date(value).toISOString();
+          metadata.cancelledAt = parseDateValue(value) ?? undefined;
+          if (!metadata.cancelledAt) unknownFields.push(match[0]);
           break;
         case 'repeat':
           metadata.recurrenceText = value;

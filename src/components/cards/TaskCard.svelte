@@ -91,6 +91,7 @@
       [15, 60, 120].includes(option.minutes)
     )
   );
+  const snoozeMenuId = $derived(() => `snooze-menu-${task.id}`);
 
   $effect(() => {
     blockPreview = task.linkedBlockContent ?? null;
@@ -297,7 +298,9 @@
         onclick={toggleSnoozeMenu}
         onkeydown={handleSnoozeKeydown}
         aria-label="Snooze task"
+        aria-haspopup="menu"
         aria-expanded={showSnoozeMenu}
+        aria-controls={snoozeMenuId}
       >
         🕒 Snooze
       </button>
@@ -320,7 +323,14 @@
         </button>
       </div>
       {#if showSnoozeMenu}
-        <div class="task-card__snooze-menu" onkeydown={handleSnoozeMenuKeydown} role="menu" tabindex="0">
+        <div
+          id={snoozeMenuId}
+          class="task-card__snooze-menu"
+          onkeydown={handleSnoozeMenuKeydown}
+          role="menu"
+          tabindex="0"
+          aria-label="Snooze options"
+        >
           {#each SNOOZE_OPTIONS as option, index}
             <button
               class="task-card__snooze-option"

@@ -114,8 +114,9 @@ export class TaskLineSerializer {
     }
 
     // Preserve unknown fields
-    if (options.unknownFields) {
-      parts.push(...options.unknownFields);
+    const preservedUnknownFields = options.unknownFields ?? task.unknownFields;
+    if (preservedUnknownFields && preservedUnknownFields.length > 0) {
+      parts.push(...preservedUnknownFields);
     }
 
     return `- [${statusSymbol}] ${parts.join(' ')}`;

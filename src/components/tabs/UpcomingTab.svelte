@@ -99,7 +99,7 @@
     </p>
   </div>
 
-  <div class="upcoming-tab__content">
+  <div class="upcoming-tab__content" role="list" aria-label="Upcoming tasks">
     {#if upcomingTasks.length === 0}
       <div class="upcoming-tab__empty">
         <p>📅 No tasks scheduled for the next {daysAhead} days</p>
@@ -117,6 +117,7 @@
             {@const globalIndex = upcomingTasks.indexOf(task)}
             <div
               class="upcoming-tab__card-wrapper"
+              role="listitem"
               tabindex={globalIndex === focusedIndex ? 0 : -1}
               bind:this={cardRefs[globalIndex]}
               onkeydown={(event) => handleCardKeydown(event, globalIndex)}

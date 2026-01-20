@@ -97,6 +97,19 @@ export class DateParser {
       return { date, isValid: true, original };
     }
 
+    // "Monday/Tuesday/etc" (next occurrence, including today)
+    const dayOnlyMatch = trimmed.match(/^(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/);
+    if (dayOnlyMatch) {
+      const targetDay = dayNames.indexOf(dayOnlyMatch[1]);
+      const currentDay = today.getDay();
+      let daysToAdd = targetDay - currentDay;
+      if (daysToAdd < 0) daysToAdd += 7;
+
+      const date = new Date(today);
+      date.setDate(date.getDate() + daysToAdd);
+      return { date, isValid: true, original };
+    }
+
     // "this/next/last week/month"
     const periodMatch = trimmed.match(/^(this|next|last)\s+(week|month)$/);
     if (periodMatch) {

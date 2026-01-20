@@ -109,7 +109,7 @@
     </p>
   </div>
 
-  <div class="done-tab__content">
+  <div class="done-tab__content" role="list" aria-label="Completed tasks">
     {#if doneTasks.length === 0}
       <div class="done-tab__empty">
         <p>✅ No completed tasks yet</p>
@@ -121,6 +121,7 @@
       {#each paginatedTasks as task, index (task.id)}
         <div
           class="done-tab__card-wrapper"
+          role="listitem"
           tabindex={index === focusedIndex ? 0 : -1}
           bind:this={cardRefs[index]}
           onkeydown={(event) => handleCardKeydown(event, index)}

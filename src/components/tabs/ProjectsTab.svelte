@@ -128,7 +128,7 @@
     </div>
   </div>
 
-  <div class="projects-tab__content">
+  <div class="projects-tab__content" role="region" aria-label="Project task lists">
     {#if groupedTasks.size === 0}
       <div class="projects-tab__empty">
         <p>📁 No active projects</p>
@@ -155,11 +155,16 @@
           </button>
 
           {#if expandedPaths.has(path)}
-            <div class="projects-tab__project-tasks">
+            <div
+              class="projects-tab__project-tasks"
+              role="list"
+              aria-label={`Tasks for ${getShortPath(path)}`}
+            >
               {#each pathTasks as task, index (task.id)}
                 {@const globalIndex = flatTasks.indexOf(task)}
                 <div
                   class="projects-tab__card-wrapper"
+                  role="listitem"
                   tabindex={globalIndex === focusedIndex ? 0 : -1}
                   bind:this={cardRefs[globalIndex]}
                   onkeydown={(event) => handleCardKeydown(event, globalIndex)}

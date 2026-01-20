@@ -63,7 +63,7 @@
     </p>
   </div>
 
-  <div class="today-tab__content">
+  <div class="today-tab__content" role="list" aria-label="Today and overdue tasks">
     {#if sortedTasks.length === 0}
       <div class="today-tab__empty">
         <p>🎉 No tasks due today or overdue!</p>
@@ -73,6 +73,7 @@
       {#each sortedTasks as task, index (task.id)}
         <div
           class="today-tab__card-wrapper"
+          role="listitem"
           tabindex={index === focusedIndex ? 0 : -1}
           bind:this={cardRefs[index]}
           onkeydown={(event) => handleCardKeydown(event, index)}

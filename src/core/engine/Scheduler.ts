@@ -40,6 +40,7 @@ export class Scheduler {
     "task:overdue": new Set(),
   };
   private readonly MAX_EMITTED_ENTRIES = 1000;
+  private readonly EMITTED_RETENTION_DAYS = 30;
   private readonly EMITTED_SAVE_DEBOUNCE_MS = 1500;
   private persistTimeoutId: number | null = null;
   private emittedStateReady: Promise<void> | null = null;
@@ -179,24 +180,60 @@ export class Scheduler {
   }
 
   private cleanupEmittedSets(): void {
-    let didTrim = false;
-    if (this.emittedDue.size > this.MAX_EMITTED_ENTRIES) {
-      const entries = Array.from(this.emittedDue);
-      this.emittedDue = new Set(entries.slice(-this.MAX_EMITTED_ENTRIES / 2));
-      didTrim = true;
-      logger.info(`Cleaned up emittedDue set: ${entries.length} -> ${this.emittedDue.size}`);
-    }
-    
-    if (this.emittedMissed.size > this.MAX_EMITTED_ENTRIES) {
-      const entries = Array.from(this.emittedMissed);
-      this.emittedMissed = new Set(entries.slice(-this.MAX_EMITTED_ENTRIES / 2));
-      didTrim = true;
-      logger.info(`Cleaned up emittedMissed set: ${entries.length} -> ${this.emittedMissed.size}`);
-    }
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - this.EMITTED_RETENTION_DAYS);
 
-    if (didTrim) {
+    const dueResult = this.pruneEmittedSet("due", this.emittedDue, cutoff);
+    const missedResult = this.pruneEmittedSet("missed", this.emittedMissed, cutoff);
+    this.emittedDue = dueResult.set;
+    this.emittedMissed = missedResult.set;
+
+    if (dueResult.didTrim || missedResult.didTrim) {
       this.schedulePersistEmittedState();
     }
+  }
+
+  private pruneEmittedSet(
+    kind: "due" | "missed",
+    entries: Set<string>,
+    cutoff: Date
+  ): { set: Set<string>; didTrim: boolean } {
+    const cutoffTime = cutoff.getTime();
+    const mapped = Array.from(entries).map((entry) => ({
+      entry,
+      time: this.parseOccurrenceKeyTimestamp(entry),
+    }));
+
+    let filtered = mapped.filter(({ time }) => time === null || time >= cutoffTime);
+    let didTrim = filtered.length !== mapped.length;
+
+    if (filtered.length > this.MAX_EMITTED_ENTRIES) {
+      filtered = filtered
+        .sort((a, b) => (a.time ?? 0) - (b.time ?? 0))
+        .slice(-this.MAX_EMITTED_ENTRIES);
+      didTrim = true;
+    }
+
+    const nextSet = new Set(filtered.map(({ entry }) => entry));
+    if (didTrim) {
+      logger.info(`Cleaned up emitted${kind === "due" ? "Due" : "Missed"} set: ${entries.size} -> ${nextSet.size}`);
+    }
+
+    return { set: nextSet, didTrim };
+  }
+
+  private parseOccurrenceKeyTimestamp(entry: string): number | null {
+    const separatorIndex = entry.indexOf(":");
+    if (separatorIndex === -1) {
+      return null;
+    }
+    const timestamp = entry.slice(separatorIndex + 1);
+    if (!timestamp) {
+      return null;
+    }
+    const normalized = timestamp.length === 13 ? `${timestamp}:00:00.000Z` : timestamp;
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
   }
 
   /**

@@ -234,7 +234,7 @@
     </div>
   </div>
 
-  <div class="search-tab__results">
+  <div class="search-tab__results" role="list" aria-label="Search results">
     {#if queryResults.length === 0 && queryInput.trim() && !queryError}
       <div class="search-tab__empty">
         <p>🔍 No tasks match your query</p>
@@ -246,6 +246,7 @@
       {#each queryResults as task, index (task.id)}
         <div
           class="search-tab__card-wrapper"
+          role="listitem"
           tabindex={index === focusedIndex ? 0 : -1}
           bind:this={cardRefs[index]}
           onkeydown={(event) => handleCardKeydown(event, index)}

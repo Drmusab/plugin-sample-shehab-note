@@ -35,9 +35,8 @@
   let { repository, scheduler, eventService }: Props = $props();
 
   // Get timezone handler and recurrence engine from scheduler
-  // Access these in component setup - they're stable references
-  const timezoneHandler = scheduler.getTimezoneHandler();
-  const recurrenceEngine = scheduler.getRecurrenceEngine();
+  const timezoneHandler = $derived(scheduler.getTimezoneHandler());
+  const recurrenceEngine = $derived(scheduler.getRecurrenceEngine());
 
   type TabType = "inbox" | "today" | "upcoming" | "done" | "projects" | "search" | "all" | "timeline" | "analytics";
   let activeTab = $state<TabType>("today");
@@ -52,6 +51,11 @@
   let allTasks = $state<Task[]>([]);
   let todayTasks = $derived(getTodayAndOverdueTasks(allTasks));
   let isRefreshing = $state(false);
+  const panelLabelId = $derived(
+    ["inbox", "today", "upcoming", "done", "projects", "search", "all"].includes(activeTab)
+      ? `dashboard-tab-${activeTab}`
+      : undefined
+  );
 
   // Apply quick filters
   const filteredTasks = $derived(() => {
@@ -426,9 +430,13 @@
       <TaskEditorModal task={editingTask} {repository} onSave={handleSaveTask} onClose={handleCancelForm} />
     </div>
   {:else}
-    <div class="dashboard__tabs">
+    <div class="dashboard__tabs" role="tablist" aria-label="Dashboard tabs">
       <button
+        id="dashboard-tab-inbox"
         class="dashboard__tab {activeTab === 'inbox' ? 'active' : ''}"
+        role="tab"
+        aria-selected={activeTab === "inbox"}
+        aria-controls="dashboard-panel"
         onclick={() => (activeTab = "inbox")}
       >
         📥 Inbox
@@ -437,7 +445,11 @@
         {/if}
       </button>
       <button
+        id="dashboard-tab-today"
         class="dashboard__tab {activeTab === 'today' ? 'active' : ''}"
+        role="tab"
+        aria-selected={activeTab === "today"}
+        aria-controls="dashboard-panel"
         onclick={() => (activeTab = "today")}
       >
         📋 Today
@@ -446,7 +458,11 @@
         {/if}
       </button>
       <button
+        id="dashboard-tab-upcoming"
         class="dashboard__tab {activeTab === 'upcoming' ? 'active' : ''}"
+        role="tab"
+        aria-selected={activeTab === "upcoming"}
+        aria-controls="dashboard-panel"
         onclick={() => (activeTab = "upcoming")}
       >
         📅 Upcoming
@@ -455,7 +471,11 @@
         {/if}
       </button>
       <button
+        id="dashboard-tab-done"
         class="dashboard__tab {activeTab === 'done' ? 'active' : ''}"
+        role="tab"
+        aria-selected={activeTab === "done"}
+        aria-controls="dashboard-panel"
         onclick={() => (activeTab = "done")}
       >
         ✅ Done
@@ -464,7 +484,11 @@
         {/if}
       </button>
       <button
+        id="dashboard-tab-projects"
         class="dashboard__tab {activeTab === 'projects' ? 'active' : ''}"
+        role="tab"
+        aria-selected={activeTab === "projects"}
+        aria-controls="dashboard-panel"
         onclick={() => (activeTab = "projects")}
       >
         📁 Projects
@@ -473,13 +497,21 @@
         {/if}
       </button>
       <button
+        id="dashboard-tab-search"
         class="dashboard__tab {activeTab === 'search' ? 'active' : ''}"
+        role="tab"
+        aria-selected={activeTab === "search"}
+        aria-controls="dashboard-panel"
         onclick={() => (activeTab = "search")}
       >
         🔍 Search
       </button>
       <button
+        id="dashboard-tab-all"
         class="dashboard__tab {activeTab === 'all' ? 'active' : ''}"
+        role="tab"
+        aria-selected={activeTab === "all"}
+        aria-controls="dashboard-panel"
         onclick={() => (activeTab = "all")}
       >
         📝 All
@@ -529,7 +561,12 @@
       </div>
     {/if}
 
-    <div class="dashboard__content">
+    <div
+      id="dashboard-panel"
+      class="dashboard__content"
+      role="tabpanel"
+      aria-labelledby={panelLabelId}
+    >
       {#if activeTab === "inbox"}
         <InboxTab
           tasks={quickFilters.size > 0 ? filteredTasks : allTasks}
@@ -589,7 +626,7 @@
       {:else if activeTab === "timeline"}
         <TimelineTab
           tasks={allTasks}
-          recurrenceEngine={scheduler.getRecurrenceEngine()}
+          {recurrenceEngine}
         />
       {:else if activeTab === "analytics"}
         <AnalyticsTab tasks={allTasks} />

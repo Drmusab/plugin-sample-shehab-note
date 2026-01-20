@@ -131,6 +131,9 @@ export interface Task {
 
   /** File path (for path-based filtering) */
   path?: string;
+
+  /** Unrecognized line metadata preserved for lossless serialization */
+  unknownFields?: string[];
 }
 
 /**
