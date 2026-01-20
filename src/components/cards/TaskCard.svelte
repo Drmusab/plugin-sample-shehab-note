@@ -8,11 +8,11 @@
 
   interface Props {
     task: Task;
-    onDone: (task: Task) => void;
+    onDone:  (task: Task) => void;
     onDelay: (task: Task) => void;
     onSkip: (task: Task) => void;
-    onEdit?: (task: Task) => void;
-    timezoneHandler?: any; // TimezoneHandler instance
+    onEdit?:  (task: Task) => void;
+    timezoneHandler?:  any; // TimezoneHandler instance
   }
 
   let { task, onDone, onDelay, onSkip, onEdit, timezoneHandler }: Props = $props();
@@ -21,13 +21,13 @@
   const overdue = $derived(isOverdue(dueDate));
   const today = $derived(isToday(dueDate));
   const overdueDays = $derived(
-    overdue ? daysBetween(new Date(task.dueAt), new Date()) : 0
+    overdue ?  daysBetween(new Date(task.dueAt), new Date()) : 0
   );
   const statusClass = $derived(
     overdue ? "task-card--overdue" : today ? "task-card--today" : ""
   );
   const overdueTint = $derived(() => {
-    if (!overdue) {
+    if (! overdue) {
       return "";
     }
     const strength = Math.min(0.45, 0.12 + overdueDays * 0.05);
@@ -42,7 +42,7 @@
   });
 
   const priorityColor = $derived(
-    task.priority ? PRIORITY_COLORS[task.priority] : PRIORITY_COLORS.normal
+    task.priority ?  PRIORITY_COLORS[task. priority] :  PRIORITY_COLORS.normal
   );
 
   const relativeTime = $derived(() => {
@@ -52,29 +52,30 @@
     return "";
   });
 
-  const hasStreak = $derived((task.currentStreak || 0) > 0);
+  const hasStreak = $derived((task. currentStreak || 0) > 0);
   const streakEmoji = $derived(() => "🔥");
 
   const health = $derived(calculateTaskHealth(task));
   const healthClass = $derived(
-    health >= 80 ? "health--good" :
+    health >= 80 ?  "health--good" : 
     health >= 50 ? "health--fair" :
     "health--poor"
   );
 
   let showSnoozeMenu = $state(false);
-  let firstSnoozeOption: HTMLButtonElement | null = $state(null);
+  let firstSnoozeOption:  HTMLButtonElement | null = $state(null);
   let snoozeMenuIndex = $state(-1);
-  let snoozeOptionRefs = $state<HTMLButtonElement[]>([]);
+  // Plain array - refs don't need to be reactive state
+  let snoozeOptionRefs: HTMLButtonElement[] = [];
   let showBlockPreview = $state(false);
   let blockPreview = $state<string | null>(null);
   let blockPreviewHtml = $state<string | null>(null);
   let blockPreviewLoading = $state(false);
   const blockIdLabel = $derived(() => {
-    if (!task.linkedBlockId) {
+    if (! task.linkedBlockId) {
       return "";
     }
-    return task.linkedBlockId.length > 10
+    return task.linkedBlockId. length > 10
       ? `${task.linkedBlockId.slice(0, 10)}…`
       : task.linkedBlockId;
   });
@@ -88,13 +89,13 @@
 
   const quickSnoozeOptions = $derived(() =>
     SNOOZE_OPTIONS.filter((option) =>
-      [15, 60, 120].includes(option.minutes)
+      [15, 60, 120]. includes(option.minutes)
     )
   );
   const snoozeMenuId = $derived(() => `snooze-menu-${task.id}`);
 
   $effect(() => {
-    blockPreview = task.linkedBlockContent ?? null;
+    blockPreview = task.linkedBlockContent ??  null;
     blockPreviewHtml = null;
     blockPreviewLoading = false;
   });
@@ -123,7 +124,7 @@
       await tick();
       snoozeMenuIndex = -1;
       snoozeOptionRefs = [];
-      firstSnoozeOption?.focus();
+      firstSnoozeOption?. focus();
     }
   }
 
@@ -174,7 +175,7 @@
 
   async function handleBlockPreviewOpen() {
     showBlockPreview = true;
-    if (!task.linkedBlockId || blockPreviewLoading || blockPreviewHtml) {
+    if (! task.linkedBlockId || blockPreviewLoading || blockPreviewHtml) {
       return;
     }
     blockPreviewLoading = true;
@@ -193,8 +194,8 @@
   
   // Sanitize task name for ARIA label
   const ariaLabel = $derived(() => {
-    const sanitized = task.name.replace(/[<>"&]/g, (char) => {
-      const entities: Record<string, string> = {
+    const sanitized = task.name. replace(/[<>"&]/g, (char) => {
+      const entities:  Record<string, string> = {
         '<': '&lt;',
         '>': '&gt;',
         '"': '&quot;',
@@ -202,7 +203,7 @@
       };
       return entities[char] || char;
     });
-    return `Task: ${sanitized}`;
+    return `Task:  ${sanitized}`;
   });
 </script>
 
@@ -211,6 +212,7 @@
   style="--overdue-tint: {overdueTint}; --overdue-border: {overdueBorder};"
   role="article"
   aria-label={ariaLabel()}
+  tabindex="0"
   onkeydown={(event) => {
     if (event.key === "Escape" && showSnoozeMenu) {
       showSnoozeMenu = false;
@@ -222,7 +224,7 @@
       <div
         class="task-card__priority-indicator"
         style="background-color: {priorityColor}"
-        title="Priority: {task.priority || 'normal'}"
+        title="Priority:  {task.priority || 'normal'}"
       ></div>
       <h3 class="task-card__name">{task.name}</h3>
       {#if hasStreak}
@@ -276,10 +278,10 @@
               <div class="task-card__block-preview-html">
                 {@html blockPreviewHtml}
               </div>
-            {:else if blockPreview}
+            {: else if blockPreview}
               {blockPreviewText}
-            {:else}
-              No preview available.
+            {: else}
+              No preview available. 
             {/if}
           </div>
         {/if}
@@ -287,7 +289,7 @@
     {/if}
   </div>
 
-  <div class="task-card__health {healthClass}" title="Task health: {health}%">
+  <div class="task-card__health {healthClass}" title="Task health:  {health}%">
     <div class="task-card__health-bar" style="width: {health}%"></div>
   </div>
 
@@ -335,7 +337,7 @@
             <button
               class="task-card__snooze-option"
               bind:this={snoozeOptionRefs[index]}
-              onclick={() => handleSnooze(option.minutes)}
+              onclick={() => handleSnooze(option. minutes)}
               role="menuitem"
               tabindex={index === 0 ? 0 : -1}
             >
@@ -381,7 +383,7 @@
   }
 
   .task-card:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow:  0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
   .task-card:focus {
@@ -405,24 +407,24 @@
     margin-bottom: 12px;
   }
 
-  .task-card__title-row {
+  . task-card__title-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex: 1;
+    flex:  1;
   }
 
   .task-card__priority-indicator {
     width: 8px;
     height: 8px;
-    border-radius: 50%;
+    border-radius:  50%;
     flex-shrink: 0;
   }
 
   .task-card__name {
     margin: 0;
     font-size: 16px;
-    font-weight: 600;
+    font-weight:  600;
     color: var(--b3-theme-on-surface);
     flex: 1;
   }
@@ -459,7 +461,7 @@
     margin-bottom: 6px;
   }
 
-  .task-card__label {
+  . task-card__label {
     color: var(--b3-theme-on-surface-light);
     margin-right: 8px;
   }
@@ -472,7 +474,7 @@
   .task-card__relative {
     color: var(--b3-theme-on-surface-light);
     font-size: 12px;
-    margin-left: 8px;
+    margin-left:  8px;
   }
 
   .task-card__linked-block {
@@ -528,143 +530,4 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-  }
-
-  .task-card__action {
-    flex: 1;
-    min-width: 80px;
-    padding: 8px 12px;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .task-card__action--snooze {
-    background: var(--b3-theme-surface-lighter);
-    color: var(--b3-theme-on-surface);
-  }
-
-  .task-card__action--snooze:hover {
-    background: var(--b3-theme-surface-light);
-  }
-
-  .task-card__snooze-quick {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .task-card__snooze-chip {
-    padding: 4px 8px;
-    border: 1px solid var(--b3-border-color);
-    border-radius: 999px;
-    background: var(--b3-theme-surface);
-    color: var(--b3-theme-on-surface);
-    font-size: 12px;
-    cursor: pointer;
-    transition: background 0.2s ease;
-  }
-
-  .task-card__snooze-chip:hover {
-    background: var(--b3-theme-surface-light);
-  }
-
-  .task-card__snooze-chip--tomorrow {
-    border-style: dashed;
-    font-weight: 600;
-  }
-
-  .task-card__action--delay {
-    background: var(--b3-theme-surface-lighter);
-    color: var(--b3-theme-on-surface);
-  }
-
-  .task-card__action--delay:hover {
-    background: var(--b3-theme-surface-light);
-  }
-
-  .task-card__action--skip {
-    background: var(--b3-theme-surface-lighter);
-    color: var(--b3-theme-on-surface);
-  }
-
-  .task-card__action--skip:hover {
-    background: var(--b3-theme-surface-light);
-  }
-
-  .task-card__action--done {
-    background: var(--b3-theme-primary);
-    color: white;
-  }
-
-  .task-card__action--done:hover {
-    background: var(--b3-theme-primary-light);
-  }
-
-  .task-card__snooze-menu {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    margin-bottom: 4px;
-    background: var(--b3-theme-surface);
-    border: 1px solid var(--b3-border-color);
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    z-index: 100;
-    min-width: 150px;
-  }
-
-  .task-card__snooze-option {
-    display: block;
-    width: 100%;
-    padding: 8px 12px;
-    background: none;
-    border: none;
-    text-align: left;
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--b3-theme-on-surface);
-    transition: background 0.2s;
-  }
-
-  .task-card__snooze-option:hover {
-    background: var(--b3-theme-surface-lighter);
-  }
-
-  .task-card__snooze-option:first-child {
-    border-radius: 6px 6px 0 0;
-  }
-
-  .task-card__snooze-option:last-child {
-    border-radius: 0 0 6px 6px;
-  }
-
-  .task-card__health {
-    height: 4px;
-    background: var(--b3-border-color);
-    border-radius: 2px;
-    overflow: hidden;
-    margin-top: 8px;
-    margin-bottom: 8px;
-  }
-
-  .task-card__health-bar {
-    height: 100%;
-    transition: width 0.3s ease;
-  }
-
-  .health--good .task-card__health-bar {
-    background: #4caf50;
-  }
-
-  .health--fair .task-card__health-bar {
-    background: #ff9800;
-  }
-
-  .health--poor .task-card__health-bar {
-    background: #f44336;
-  }
-</style>
+  
