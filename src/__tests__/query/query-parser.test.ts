@@ -125,6 +125,37 @@ describe('QueryParser', () => {
       expect(ast.filters[0].value.date).toBeInstanceOf(Date);
     });
 
+    it('should parse "between" operator with natural language dates', () => {
+      const parser = new QueryParser();
+      const ast = parser.parse('due between today and next Friday');
+      
+      expect(ast.filters).toHaveLength(1);
+      expect(ast.filters[0].type).toBe('date');
+      expect(ast.filters[0].operator).toBe('between');
+      expect(ast.filters[0].value.field).toBe('due');
+      expect(ast.filters[0].value.date).toBeInstanceOf(Date);
+      expect(ast.filters[0].value.endDate).toBeInstanceOf(Date);
+    });
+
+    it('should parse "between" operator with ISO dates', () => {
+      const parser = new QueryParser();
+      const ast = parser.parse('scheduled between 2026-01-20 and 2026-01-30');
+      
+      expect(ast.filters).toHaveLength(1);
+      expect(ast.filters[0].type).toBe('date');
+      expect(ast.filters[0].operator).toBe('between');
+      expect(ast.filters[0].value.field).toBe('scheduled');
+      expect(ast.filters[0].value.date).toBeInstanceOf(Date);
+      expect(ast.filters[0].value.endDate).toBeInstanceOf(Date);
+    });
+
+    it('should parse "in the next 7 days" using natural language', () => {
+      const parser = new QueryParser();
+      const ast = parser.parse('due before in 7 days');
+      
+      expect(ast.filters[0].value.date).toBeInstanceOf(Date);
+    });
+
     it('should throw error for invalid date', () => {
       const parser = new QueryParser();
       

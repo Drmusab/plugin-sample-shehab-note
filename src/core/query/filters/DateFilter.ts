@@ -1,14 +1,15 @@
 import { Filter } from './FilterBase';
 import type { Task } from '@/core/models/Task';
 
-export type DateComparator = 'before' | 'after' | 'on' | 'on or before' | 'on or after';
+export type DateComparator = 'before' | 'after' | 'on' | 'on or before' | 'on or after' | 'between';
 export type DateField = 'due' | 'scheduled' | 'start' | 'created' | 'done' | 'cancelled';
 
 export class DateComparisonFilter extends Filter {
   constructor(
     private field: DateField,
     private comparator: DateComparator,
-    private targetDate: Date
+    private targetDate: Date,
+    private endDate?: Date // For "between" operator
   ) {
     super();
   }
@@ -37,6 +38,13 @@ export class DateComparisonFilter extends Filter {
         return actual <= target;
       case 'on or after':
         return actual >= target;
+      case 'between':
+        if (!this.endDate) {
+          return false;
+        }
+        const end = new Date(this.endDate);
+        end.setHours(0, 0, 0, 0);
+        return actual >= target && actual <= end;
       default:
         return false;
     }

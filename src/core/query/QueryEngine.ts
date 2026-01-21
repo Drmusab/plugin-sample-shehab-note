@@ -208,6 +208,13 @@ export class QueryEngine {
       case 'date':
         if (node.operator === 'has') {
           return new HasDateFilter(node.value.field, node.negate);
+        } else if (node.operator === 'between') {
+          return new DateComparisonFilter(
+            node.value.field as DateField,
+            node.operator as DateComparator,
+            node.value.date,
+            node.value.endDate
+          );
         } else {
           return new DateComparisonFilter(
             node.value.field as DateField,

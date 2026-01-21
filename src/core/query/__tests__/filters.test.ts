@@ -358,4 +358,74 @@ describe('Enhanced Query Language Filters', () => {
       expect(result.tasks[0].priority).toBe('high');
     });
   });
+
+  describe('DateFilter with "between" operator', () => {
+    const tasksWithDates: Task[] = [
+      {
+        id: '1',
+        name: 'Task 1',
+        statusSymbol: ' ',
+        dueAt: '2024-01-15T10:00:00Z',
+        createdAt: '2024-01-01T10:00:00Z',
+      } as Task,
+      {
+        id: '2',
+        name: 'Task 2',
+        statusSymbol: ' ',
+        dueAt: '2024-01-20T10:00:00Z',
+        createdAt: '2024-01-01T10:00:00Z',
+      } as Task,
+      {
+        id: '3',
+        name: 'Task 3',
+        statusSymbol: ' ',
+        dueAt: '2024-01-25T10:00:00Z',
+        createdAt: '2024-01-01T10:00:00Z',
+      } as Task,
+      {
+        id: '4',
+        name: 'Task 4',
+        statusSymbol: ' ',
+        dueAt: '2024-02-05T10:00:00Z',
+        createdAt: '2024-01-01T10:00:00Z',
+      } as Task,
+    ];
+
+    const dateIndex = {
+      getAllTasks: () => tasksWithDates,
+    };
+
+    it('should filter tasks between two dates', () => {
+      const parser = new QueryParser();
+      const ast = parser.parse('due between 2024-01-20 and 2024-01-31');
+      const engine = new QueryEngine(dateIndex);
+      const result = engine.execute(ast);
+      
+      expect(result.tasks.length).toBe(2);
+      expect(result.tasks.map(t => t.id)).toContain('2');
+      expect(result.tasks.map(t => t.id)).toContain('3');
+    });
+
+    it('should include boundary dates in "between" filter', () => {
+      const parser = new QueryParser();
+      const ast = parser.parse('due between 2024-01-15 and 2024-01-20');
+      const engine = new QueryEngine(dateIndex);
+      const result = engine.execute(ast);
+      
+      expect(result.tasks.length).toBe(2);
+      expect(result.tasks.map(t => t.id)).toContain('1');
+      expect(result.tasks.map(t => t.id)).toContain('2');
+    });
+
+    it('should work with natural language dates in "between"', () => {
+      const referenceDate = new Date('2024-01-15T12:00:00Z');
+      const parser = new QueryParser();
+      const ast = parser.parse('due between today and in 7 days', referenceDate);
+      const engine = new QueryEngine(dateIndex);
+      const result = engine.execute(ast);
+      
+      // Should match tasks within 7 days from reference date
+      expect(result.tasks.length).toBeGreaterThan(0);
+    });
+  });
 });

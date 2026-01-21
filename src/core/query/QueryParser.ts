@@ -110,7 +110,17 @@ export class QueryParser {
       return { type: 'done', operator: 'is', value: false };
     }
     
-    // Check for boolean operators (after simple keywords)
+    // Check for "between" date filters first (before boolean operators)
+    // to avoid "and" in "between X and Y" being parsed as boolean AND
+    const betweenMatch = line.match(/^(due|scheduled|start|created|done|cancelled)\s+between\s+/i);
+    if (betweenMatch) {
+      const dateFilter = this.parseDateFilter(line);
+      if (dateFilter) {
+        return dateFilter;
+      }
+    }
+    
+    // Check for boolean operators (after simple keywords and between)
     // Use regex for more robust case-insensitive matching
     if (/\s+(and|AND)\s+/i.test(line)) {
       return this.parseAndFilter(line);
@@ -265,6 +275,40 @@ export class QueryParser {
       // "no X date" pattern
       if (line === `no ${field} date`) {
         return { type: 'date', operator: 'has', value: { field }, negate: true };
+      }
+
+      // "X between DATE1 and DATE2" pattern
+      const betweenMatch = line.match(new RegExp(`^${field}\\s+between\\s+(.+?)\\s+and\\s+(.+)$`, 'i'));
+      if (betweenMatch) {
+        const startDateStr = betweenMatch[1].trim();
+        const endDateStr = betweenMatch[2].trim();
+        
+        const parsedStart = DateParser.parse(startDateStr, this.referenceDate);
+        const parsedEnd = DateParser.parse(endDateStr, this.referenceDate);
+        
+        if (!parsedStart.isValid || !parsedStart.date) {
+          throw new QuerySyntaxError(
+            `Invalid start date: "${startDateStr}"`,
+            this.line,
+            this.column,
+            'Use formats like: today, tomorrow, YYYY-MM-DD, "in 3 days", "next Monday"'
+          );
+        }
+        
+        if (!parsedEnd.isValid || !parsedEnd.date) {
+          throw new QuerySyntaxError(
+            `Invalid end date: "${endDateStr}"`,
+            this.line,
+            this.column,
+            'Use formats like: today, tomorrow, YYYY-MM-DD, "in 3 days", "next Monday"'
+          );
+        }
+        
+        return {
+          type: 'date',
+          operator: 'between',
+          value: { field, date: parsedStart.date, endDate: parsedEnd.date }
+        };
       }
 
       // "X before/after/on VALUE" patterns
