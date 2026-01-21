@@ -160,6 +160,29 @@ export interface Task {
     confidenceThreshold: number; // 0-1
   };
 
+  // AI-driven analytics (for Smart Suggestions)
+  
+  /** Unix timestamps of completions */
+  completionTimes?: number[];
+  
+  /** Minutes to complete (if tracked) */
+  completionDurations?: number[];
+  
+  /** Completion context data for predictive scheduling */
+  completionContexts?: {
+    dayOfWeek: number;
+    hourOfDay: number;
+    wasOverdue: boolean;
+    delayMinutes?: number;
+  }[];
+  
+  /** Suggestion interaction history */
+  suggestionHistory?: {
+    suggestionId: string;
+    accepted: boolean;
+    timestamp: string;
+  }[];
+
   // Phase 3: Cross-Note Dependencies
   
   /** Dependencies on other SiYuan notes/blocks */

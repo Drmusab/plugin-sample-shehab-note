@@ -282,6 +282,7 @@ export function mergeSettings(userSettings: Partial<PluginSettings>): PluginSett
       ...DEFAULT_SETTINGS.predictiveScheduling,
       ...userSettings.predictiveScheduling,
       preferredDays: userSettings.predictiveScheduling?.preferredDays ?? DEFAULT_SETTINGS.predictiveScheduling.preferredDays,
+      workingHours: userSettings.predictiveScheduling?.workingHours ?? DEFAULT_SETTINGS.predictiveScheduling.workingHours,
     },
     keyboardNavigation: {
       ...DEFAULT_SETTINGS.keyboardNavigation,

@@ -367,31 +367,3 @@ export class SmartSuggestionEngine {
     return `${displayHour}${period}`;
   }
 }
-
-/**
- * Extension to Task interface for analytics
- */
-declare module '@/core/models/Task' {
-  interface Task {
-    /** Unix timestamps of completions */
-    completionTimes?: number[];
-    
-    /** Minutes to complete (if tracked) */
-    completionDurations?: number[];
-    
-    /** Completion context data */
-    completionContexts?: {
-      dayOfWeek: number;
-      hourOfDay: number;
-      wasOverdue: boolean;
-      delayMinutes?: number;
-    }[];
-    
-    /** Suggestion interaction history */
-    suggestionHistory?: {
-      suggestionId: string;
-      accepted: boolean;
-      timestamp: string;
-    }[];
-  }
-}
