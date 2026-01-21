@@ -1,0 +1,305 @@
+import type { QueryResult } from "@/core/query/QueryEngine";
+import type { Task } from "@/core/models/Task";
+import type { InlineQueryView } from "@/core/inline-query/InlineQueryBlockParser";
+
+export interface InlineQueryRenderOptions {
+  query: string;
+  view: InlineQueryView;
+  result?: QueryResult;
+  error?: string;
+  isIndexing?: boolean;
+  maxItems?: number;
+  renderedCount?: number;
+}
+
+export class InlineQueryRenderer {
+  render(container: HTMLElement, options: InlineQueryRenderOptions): void {
+    container.innerHTML = "";
+    container.classList.add("rt-inline-query");
+    container.dataset.query = options.query;
+    container.dataset.view = options.view;
+
+    if (options.isIndexing) {
+      container.appendChild(this.renderState("Index building…"));
+      return;
+    }
+
+    if (options.error) {
+      container.appendChild(this.renderState(options.error, "error"));
+      return;
+    }
+
+    if (!options.result) {
+      container.appendChild(this.renderState("No results yet."));
+      return;
+    }
+
+    const tasks = options.result.tasks;
+    const total = tasks.length;
+    if (total === 0 || tasks.length === 0) {
+      container.appendChild(this.renderState("No tasks match this query."));
+      return;
+    }
+
+    const header = document.createElement("div");
+    header.className = "rt-inline-query__header";
+    header.textContent = `Inline Tasks · ${total}`;
+    container.appendChild(header);
+
+    const view = options.view || "list";
+    const groupMap = options.result.groups;
+    if (groupMap && groupMap.size > 0) {
+      groupMap.forEach((groupTasks, name) => {
+        const section = this.renderGroupSection(name, groupTasks, view, options);
+        container.appendChild(section);
+      });
+    } else {
+      container.appendChild(this.renderTaskCollection(tasks, view, options));
+    }
+
+    if (typeof options.maxItems === "number" && typeof options.renderedCount === "number") {
+      if (options.renderedCount < total) {
+        const footer = document.createElement("div");
+        footer.className = "rt-inline-query__footer";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "rt-inline-query__more";
+        button.dataset.rtAction = "more";
+        button.textContent = `Show more (${options.renderedCount}/${total})`;
+        footer.appendChild(button);
+        container.appendChild(footer);
+      }
+    }
+  }
+
+  private renderGroupSection(
+    name: string,
+    tasks: Task[],
+    view: InlineQueryView,
+    options: InlineQueryRenderOptions
+  ): HTMLElement {
+    const section = document.createElement("section");
+    section.className = "rt-inline-query__group";
+
+    const heading = document.createElement("div");
+    heading.className = "rt-inline-query__group-title";
+    heading.textContent = name || "Untitled";
+    section.appendChild(heading);
+
+    section.appendChild(this.renderTaskCollection(tasks, view, options));
+    return section;
+  }
+
+  private renderTaskCollection(
+    tasks: Task[],
+    view: InlineQueryView,
+    options: InlineQueryRenderOptions
+  ): HTMLElement {
+    if (view === "table") {
+      return this.renderTable(tasks, options);
+    }
+    return this.renderList(tasks, options);
+  }
+
+  private renderList(tasks: Task[], options: InlineQueryRenderOptions): HTMLElement {
+    const list = document.createElement("ul");
+    list.className = "rt-inline-query__list";
+
+    const rendered = this.getRenderedTasks(tasks, options);
+    rendered.forEach((task) => {
+      const item = document.createElement("li");
+      item.className = "rt-inline-query__item";
+      item.dataset.taskId = task.id;
+
+      const checkbox = document.createElement("button");
+      checkbox.type = "button";
+      checkbox.className = "rt-inline-query__checkbox";
+      checkbox.dataset.rtAction = "toggle";
+      checkbox.setAttribute("aria-pressed", String(task.status === "done"));
+      checkbox.textContent = task.status === "done" ? "☑" : "☐";
+
+      const title = document.createElement("span");
+      title.className = "rt-inline-query__title";
+      title.textContent = task.name;
+      if (task.status === "done") {
+        title.classList.add("rt-inline-query__title--done");
+      }
+
+      const meta = document.createElement("span");
+      meta.className = "rt-inline-query__meta";
+      meta.textContent = this.formatTaskMeta(task);
+
+      const source = this.renderSource(task);
+
+      const editButton = document.createElement("button");
+      editButton.type = "button";
+      editButton.className = "rt-inline-query__edit";
+      editButton.dataset.rtAction = "edit";
+      editButton.textContent = "Edit";
+
+      item.appendChild(checkbox);
+      item.appendChild(title);
+      item.appendChild(meta);
+      if (source) {
+        item.appendChild(source);
+      }
+      item.appendChild(editButton);
+
+      list.appendChild(item);
+    });
+
+    return list;
+  }
+
+  private renderTable(tasks: Task[], options: InlineQueryRenderOptions): HTMLElement {
+    const table = document.createElement("table");
+    table.className = "rt-inline-query__table";
+
+    const head = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    ["Status", "Task", "Dates", "Priority", "Source", ""].forEach((label) => {
+      const th = document.createElement("th");
+      th.textContent = label;
+      headRow.appendChild(th);
+    });
+    head.appendChild(headRow);
+    table.appendChild(head);
+
+    const body = document.createElement("tbody");
+    const rendered = this.getRenderedTasks(tasks, options);
+    rendered.forEach((task) => {
+      const row = document.createElement("tr");
+      row.dataset.taskId = task.id;
+
+      const statusCell = document.createElement("td");
+      const checkbox = document.createElement("button");
+      checkbox.type = "button";
+      checkbox.className = "rt-inline-query__checkbox";
+      checkbox.dataset.rtAction = "toggle";
+      checkbox.setAttribute("aria-pressed", String(task.status === "done"));
+      checkbox.textContent = task.status === "done" ? "☑" : "☐";
+      statusCell.appendChild(checkbox);
+
+      const titleCell = document.createElement("td");
+      titleCell.textContent = task.name;
+      if (task.status === "done") {
+        titleCell.classList.add("rt-inline-query__title--done");
+      }
+
+      const dateCell = document.createElement("td");
+      dateCell.textContent = this.formatTaskDates(task);
+
+      const priorityCell = document.createElement("td");
+      priorityCell.textContent = task.priority ?? "—";
+
+      const sourceCell = document.createElement("td");
+      const source = this.renderSource(task);
+      if (source) {
+        sourceCell.appendChild(source);
+      } else {
+        sourceCell.textContent = "—";
+      }
+
+      const actionsCell = document.createElement("td");
+      const editButton = document.createElement("button");
+      editButton.type = "button";
+      editButton.className = "rt-inline-query__edit";
+      editButton.dataset.rtAction = "edit";
+      editButton.textContent = "Edit";
+      actionsCell.appendChild(editButton);
+
+      row.appendChild(statusCell);
+      row.appendChild(titleCell);
+      row.appendChild(dateCell);
+      row.appendChild(priorityCell);
+      row.appendChild(sourceCell);
+      row.appendChild(actionsCell);
+
+      body.appendChild(row);
+    });
+    table.appendChild(body);
+
+    return table;
+  }
+
+  private getRenderedTasks(tasks: Task[], options: InlineQueryRenderOptions): Task[] {
+    if (!options.maxItems) {
+      return tasks;
+    }
+    return tasks.slice(0, options.maxItems);
+  }
+
+  private formatTaskDates(task: Task): string {
+    const parts: string[] = [];
+    if (task.dueAt) {
+      parts.push(`Due ${this.formatDate(task.dueAt)}`);
+    }
+    if (task.scheduledAt) {
+      parts.push(`Scheduled ${this.formatDate(task.scheduledAt)}`);
+    }
+    if (task.startAt) {
+      parts.push(`Start ${this.formatDate(task.startAt)}`);
+    }
+    return parts.length > 0 ? parts.join(" · ") : "—";
+  }
+
+  private formatTaskMeta(task: Task): string {
+    const parts: string[] = [];
+    if (task.dueAt) {
+      parts.push(`Due ${this.formatDate(task.dueAt)}`);
+    }
+    if (task.scheduledAt) {
+      parts.push(`Scheduled ${this.formatDate(task.scheduledAt)}`);
+    }
+    if (task.startAt) {
+      parts.push(`Start ${this.formatDate(task.startAt)}`);
+    }
+    if (task.priority) {
+      parts.push(`Priority ${task.priority}`);
+    }
+    return parts.length > 0 ? parts.join(" · ") : "No dates";
+  }
+
+  private formatDate(iso?: string): string {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleDateString();
+    } catch {
+      return iso;
+    }
+  }
+
+  private renderSource(task: Task): HTMLElement | null {
+    if (!task.linkedBlockId && !task.path) {
+      return null;
+    }
+    const link = document.createElement("a");
+    link.className = "rt-inline-query__source";
+    link.dataset.rtAction = "jump";
+    link.dataset.blockId = task.linkedBlockId ?? "";
+    if (task.linkedBlockId) {
+      link.href = `siyuan://blocks/${task.linkedBlockId}`;
+    }
+    link.textContent = this.formatSourceLabel(task);
+    link.title = task.path ?? task.linkedBlockId ?? "";
+    return link;
+  }
+
+  private formatSourceLabel(task: Task): string {
+    if (task.path) {
+      const parts = task.path.split("/");
+      return parts[parts.length - 1] || task.path;
+    }
+    if (task.linkedBlockId) {
+      return "Block";
+    }
+    return "Source";
+  }
+
+  private renderState(message: string, tone: "info" | "error" = "info"): HTMLElement {
+    const state = document.createElement("div");
+    state.className = `rt-inline-query__state rt-inline-query__state--${tone}`;
+    state.textContent = message;
+    return state;
+  }
+}

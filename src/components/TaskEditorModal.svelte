@@ -7,6 +7,7 @@
   import { createDefaultFrequency } from "@/core/models/Frequency";
   import { RecurrenceParser } from "@/core/parsers/RecurrenceParser";
   import { toast } from "@/utils/notifications";
+  import { pluginEventBus } from "@/core/events/PluginEventBus";
   import PrioritySelector from "./ui/PrioritySelector.svelte";
   import StatusSelector from "./ui/StatusSelector.svelte";
   import RecurrenceInput from "./ui/RecurrenceInput.svelte";
@@ -151,6 +152,7 @@
       }
 
       toast.success(`Task "${savedTask.name}" ${isNew ? "created" : "updated"}`);
+      pluginEventBus.emit("task:refresh", undefined);
       window.dispatchEvent(new CustomEvent("recurring-task-refresh"));
       onClose();
     } catch (err) {

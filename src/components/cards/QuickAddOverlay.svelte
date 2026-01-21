@@ -4,6 +4,7 @@
   import { createTask } from "@/core/models/Task";
   import { createDefaultFrequency, isValidFrequency } from "@/core/models/Frequency";
   import { toast } from "@/utils/notifications";
+  import { pluginEventBus } from "@/core/events/PluginEventBus";
 
   interface Prefill {
     suggestedName?:  string;
@@ -73,6 +74,7 @@
     try {
       await repository.saveTask(task);
       toast.success(`Task "${task.name}" created`);
+      pluginEventBus.emit("task:refresh", undefined);
       window.dispatchEvent(new CustomEvent("recurring-task-refresh"));
       onClose();
     } catch (err) {

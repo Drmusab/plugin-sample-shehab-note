@@ -113,6 +113,126 @@ select:focus-visible {
   }
 }
 
+.rt-inline-query {
+  margin: 8px 0 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--b3-border-color);
+  background: var(--b3-theme-background);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__header {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.7;
+    letter-spacing: 0.08em;
+  }
+
+  &__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__item {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  &__checkbox {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 16px;
+  }
+
+  &__title {
+    font-weight: 500;
+    color: var(--b3-theme-on-surface);
+  }
+
+  &__title--done {
+    text-decoration: line-through;
+    opacity: 0.6;
+  }
+
+  &__meta {
+    font-size: 12px;
+    color: var(--b3-theme-on-surface-light);
+    white-space: nowrap;
+  }
+
+  &__source {
+    font-size: 12px;
+    color: var(--b3-theme-primary);
+    text-decoration: none;
+  }
+
+  &__edit {
+    border: 1px solid var(--b3-border-color);
+    background: var(--b3-theme-surface);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  &__group-title {
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  &__state {
+    font-size: 13px;
+    padding: 8px 0;
+  }
+
+  &__state--error {
+    color: #d9534f;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+
+    th,
+    td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--b3-border-color);
+    }
+
+    th {
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      opacity: 0.6;
+    }
+  }
+
+  &__footer {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  &__more {
+    border: none;
+    background: var(--b3-theme-surface);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+}
+
 /* Dark mode adjustments */
 .b3-theme--dark {
   .task-card--overdue {

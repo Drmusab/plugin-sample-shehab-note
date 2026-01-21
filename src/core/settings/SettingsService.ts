@@ -5,6 +5,7 @@
 import type { Plugin } from "siyuan";
 import type { PluginSettings } from "./PluginSettings";
 import { DEFAULT_SETTINGS, mergeSettings } from "./PluginSettings";
+import { pluginEventBus } from "@/core/events/PluginEventBus";
 
 const PLUGIN_SETTINGS_KEY = "plugin-settings";
 
@@ -40,6 +41,7 @@ export class SettingsService {
   async save(settings: PluginSettings): Promise<void> {
     this.settings = settings;
     await this.plugin.saveData(PLUGIN_SETTINGS_KEY, settings);
+    pluginEventBus.emit("task:refresh", undefined);
   }
 
   /**
@@ -55,5 +57,6 @@ export class SettingsService {
   async update(partial: Partial<PluginSettings>): Promise<void> {
     this.settings = mergeSettings(partial);
     await this.plugin.saveData(PLUGIN_SETTINGS_KEY, this.settings);
+    pluginEventBus.emit("task:refresh", undefined);
   }
 }

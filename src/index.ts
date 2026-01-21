@@ -20,6 +20,7 @@ import { showToast, toast } from "./utils/notifications";
 import { pluginEventBus } from "./core/events/PluginEventBus";
 import { snoozeTask } from "./utils/snooze";
 import type { ShortcutManager } from "./commands/ShortcutManager";
+import { InlineQueryController } from "./core/inline-query/InlineQueryController";
 import "./index.scss";
 
 export default class RecurringTasksPlugin extends Plugin {
@@ -40,6 +41,7 @@ export default class RecurringTasksPlugin extends Plugin {
   private postponeContainer: HTMLElement | null = null;
   private pendingCompletionTimeouts: Map<string, number> = new Map();
   private shortcutManager: ShortcutManager | null = null;
+  private inlineQueryController: InlineQueryController | null = null;
 
   async onload() {
     logger.info("Loading Recurring Tasks Plugin");
@@ -120,6 +122,15 @@ export default class RecurringTasksPlugin extends Plugin {
     // Add event listeners for custom events
     this.addEventListeners();
 
+    this.inlineQueryController = new InlineQueryController({
+      plugin: this,
+      repository: this.repository,
+      settingsService: this.settingsService,
+      onEditTask: (task) => this.openTaskEditor(task),
+      onToggleTask: (taskId) => pluginEventBus.emit("task:complete", { taskId }),
+    });
+    this.inlineQueryController.mount();
+
     logger.info("Recurring Tasks Plugin loaded successfully");
   }
 
@@ -152,6 +163,11 @@ export default class RecurringTasksPlugin extends Plugin {
     if (this.shortcutManager) {
       this.shortcutManager.destroy();
       this.shortcutManager = null;
+    }
+
+    if (this.inlineQueryController) {
+      this.inlineQueryController.destroy();
+      this.inlineQueryController = null;
     }
   }
 
@@ -284,6 +300,7 @@ export default class RecurringTasksPlugin extends Plugin {
             this.topbarMenu.update();
           }
 
+          pluginEventBus.emit("task:refresh", undefined);
           logger.info(`Task completed: ${task.name}`);
         } catch (err) {
           logger.error("Failed to finalize task completion", err);
