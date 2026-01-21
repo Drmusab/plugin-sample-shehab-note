@@ -86,6 +86,15 @@ export interface PluginSettings {
   
   /** Cross-note dependencies configuration */
   crossNoteDependencies: CrossNoteDependenciesSettings;
+
+  /** Smart suggestions configuration */
+  smartSuggestions: SmartSuggestionsSettings;
+
+  /** Predictive scheduling configuration */
+  predictiveScheduling: PredictiveSchedulingSettings;
+
+  /** Keyboard navigation configuration */
+  keyboardNavigation: KeyboardNavigationSettings;
 }
 
 /**
@@ -114,6 +123,39 @@ export interface CrossNoteDependenciesSettings {
   enabled: boolean;
   checkInterval: number; // minutes
   notifyWhenMet: boolean;
+}
+
+/**
+ * Smart suggestions settings
+ */
+export interface SmartSuggestionsSettings {
+  enabled: boolean;
+  minConfidence: number; // 0-1
+  showDismissed: boolean;
+  autoApplyHighConfidence: boolean;
+}
+
+/**
+ * Predictive scheduling settings
+ */
+export interface PredictiveSchedulingSettings {
+  enabled: boolean;
+  showHeatmap: boolean;
+  minDataPoints: number;
+  workingHours: { start: number; end: number };
+  preferredDays: number[];
+}
+
+/**
+ * Keyboard navigation settings
+ */
+export interface KeyboardNavigationSettings {
+  enabled: boolean;
+  useVimKeybindings: boolean;
+  customKeybindings: Record<string, string>;
+  showModeIndicator: boolean;
+  showQuickHints: boolean;
+  enableCommandPalette: boolean;
 }
 
 /**
@@ -158,6 +200,27 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     enabled: true,
     checkInterval: 5,
     notifyWhenMet: true,
+  },
+  smartSuggestions: {
+    enabled: true,
+    minConfidence: 0.65,
+    showDismissed: false,
+    autoApplyHighConfidence: false,
+  },
+  predictiveScheduling: {
+    enabled: true,
+    showHeatmap: true,
+    minDataPoints: 5,
+    workingHours: { start: 6, end: 22 },
+    preferredDays: [1, 2, 3, 4, 5], // Monday-Friday
+  },
+  keyboardNavigation: {
+    enabled: false, // Opt-in feature
+    useVimKeybindings: true,
+    customKeybindings: {},
+    showModeIndicator: true,
+    showQuickHints: true,
+    enableCommandPalette: true,
   },
 };
 
@@ -210,6 +273,20 @@ export function mergeSettings(userSettings: Partial<PluginSettings>): PluginSett
     crossNoteDependencies: {
       ...DEFAULT_SETTINGS.crossNoteDependencies,
       ...userSettings.crossNoteDependencies,
+    },
+    smartSuggestions: {
+      ...DEFAULT_SETTINGS.smartSuggestions,
+      ...userSettings.smartSuggestions,
+    },
+    predictiveScheduling: {
+      ...DEFAULT_SETTINGS.predictiveScheduling,
+      ...userSettings.predictiveScheduling,
+      preferredDays: userSettings.predictiveScheduling?.preferredDays ?? DEFAULT_SETTINGS.predictiveScheduling.preferredDays,
+    },
+    keyboardNavigation: {
+      ...DEFAULT_SETTINGS.keyboardNavigation,
+      ...userSettings.keyboardNavigation,
+      customKeybindings: userSettings.keyboardNavigation?.customKeybindings ?? DEFAULT_SETTINGS.keyboardNavigation.customKeybindings,
     },
   };
 }
