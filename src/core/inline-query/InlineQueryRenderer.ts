@@ -18,6 +18,8 @@ export class InlineQueryRenderer {
     container.classList.add("rt-inline-query");
     container.dataset.query = options.query;
     container.dataset.view = options.view;
+    container.setAttribute("role", "region");
+    container.setAttribute("aria-label", "Task query results");
 
     if (options.isIndexing) {
       container.appendChild(this.renderLoadingState());
@@ -104,6 +106,8 @@ export class InlineQueryRenderer {
   private renderList(tasks: Task[], options: InlineQueryRenderOptions): HTMLElement {
     const list = document.createElement("ul");
     list.className = "rt-inline-query__list";
+    list.setAttribute("role", "list");
+    list.setAttribute("aria-label", "Tasks");
 
     // Use DocumentFragment for batch DOM insertion
     const fragment = document.createDocumentFragment();
@@ -119,6 +123,7 @@ export class InlineQueryRenderer {
       checkbox.className = "rt-inline-query__checkbox";
       checkbox.dataset.rtAction = "toggle";
       checkbox.setAttribute("aria-pressed", String(task.status === "done"));
+      checkbox.setAttribute("aria-label", task.status === "done" ? `Mark incomplete: ${task.name}` : `Mark complete: ${task.name}`);
       checkbox.textContent = task.status === "done" ? "☑" : "☐";
 
       const title = document.createElement("span");
@@ -138,6 +143,7 @@ export class InlineQueryRenderer {
       editButton.type = "button";
       editButton.className = "rt-inline-query__edit";
       editButton.dataset.rtAction = "edit";
+      editButton.setAttribute("aria-label", `Edit task: ${task.name}`);
       editButton.textContent = "Edit";
 
       item.appendChild(checkbox);
@@ -158,6 +164,8 @@ export class InlineQueryRenderer {
   private renderTable(tasks: Task[], options: InlineQueryRenderOptions): HTMLElement {
     const table = document.createElement("table");
     table.className = "rt-inline-query__table";
+    table.setAttribute("role", "table");
+    table.setAttribute("aria-label", "Tasks table");
 
     const head = document.createElement("thead");
     const headRow = document.createElement("tr");
@@ -185,6 +193,7 @@ export class InlineQueryRenderer {
       checkbox.className = "rt-inline-query__checkbox";
       checkbox.dataset.rtAction = "toggle";
       checkbox.setAttribute("aria-pressed", String(task.status === "done"));
+      checkbox.setAttribute("aria-label", task.status === "done" ? `Mark incomplete: ${task.name}` : `Mark complete: ${task.name}`);
       checkbox.textContent = task.status === "done" ? "☑" : "☐";
       statusCell.appendChild(checkbox);
 
@@ -213,6 +222,7 @@ export class InlineQueryRenderer {
       editButton.type = "button";
       editButton.className = "rt-inline-query__edit";
       editButton.dataset.rtAction = "edit";
+      editButton.setAttribute("aria-label", `Edit task: ${task.name}`);
       editButton.textContent = "Edit";
       actionsCell.appendChild(editButton);
 

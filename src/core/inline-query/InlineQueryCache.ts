@@ -46,6 +46,11 @@ export class InlineQueryCache {
     }
     // Update last accessed time for LRU tracking
     entry.lastAccessedAt = Date.now();
+    
+    // Move to end of Map to maintain LRU order
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    
     this.metrics.hits++;
     return entry;
   }
@@ -70,20 +75,12 @@ export class InlineQueryCache {
 
   /**
    * Evicts the least recently used entry from the cache
+   * Uses Map's insertion order - first entry is the least recently used
    */
   private evictLRU(): void {
-    let oldestKey: string | null = null;
-    let oldestTime = Infinity;
-
-    for (const [key, entry] of this.cache.entries()) {
-      if (entry.lastAccessedAt < oldestTime) {
-        oldestTime = entry.lastAccessedAt;
-        oldestKey = key;
-      }
-    }
-
-    if (oldestKey) {
-      this.cache.delete(oldestKey);
+    const firstKey = this.cache.keys().next().value;
+    if (firstKey) {
+      this.cache.delete(firstKey);
       this.metrics.evictions++;
     }
   }
