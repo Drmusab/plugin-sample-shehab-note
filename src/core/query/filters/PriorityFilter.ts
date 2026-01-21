@@ -29,7 +29,7 @@ function mapToPriorityLevel(p: Priority | undefined): PriorityLevel {
     case 'high':
       return 'high';
     case 'urgent':
-      return 'highest';
+      return 'urgent';
     default:
       return 'normal';
   }

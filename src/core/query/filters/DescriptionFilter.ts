@@ -29,6 +29,7 @@ export class DescriptionFilter extends Filter {
       result = combinedText.toLowerCase().includes(this.pattern.toLowerCase());
     }
     
-    return (this.operator === 'does not include' || this.negate) ? !result : result;
+    // Handle negation properly: 'does not include' XOR negate
+    return (this.operator === 'does not include') !== this.negate ? !result : result;
   }
 }
