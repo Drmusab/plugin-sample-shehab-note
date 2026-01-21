@@ -34,6 +34,10 @@ Supported priority levels:
 - `highest` / `urgent` (weight: 4)
 
 ### 3. Date Filters
+
+Date filters support both ISO date format (YYYY-MM-DD) and natural language expressions.
+
+#### Basic Date Comparisons
 ```
 due today                     # Due today
 due before tomorrow           # Due before tomorrow
@@ -47,6 +51,44 @@ scheduled before next week    # Scheduled before next week
 scheduled after yesterday     # Scheduled after yesterday
 start after yesterday         # Starts after yesterday
 start before next Monday      # Starts before next Monday
+```
+
+#### Date Ranges with "between"
+The `between` operator allows you to filter tasks within a date range:
+```
+due between 2026-01-20 and 2026-01-30           # ISO dates
+due between today and next Friday               # Natural language
+scheduled between in 7 days and in 14 days      # Relative dates
+start between January 15 and January 31         # Month names
+```
+Both the start and end dates are inclusive.
+
+#### Natural Language Date Support
+The query engine supports comprehensive natural language date parsing:
+
+**Relative keywords:**
+- `today`, `tomorrow`, `yesterday`
+- `next Monday`, `last Friday` (any day of week)
+- `next week`, `last week`, `this week`
+- `next month`, `last month`, `this month`
+
+**Relative expressions:**
+- `in 3 days`, `in 2 weeks`, `in 1 month`
+- `3 days ago`, `2 weeks ago`, `1 month ago`
+- `two weeks from now`
+
+**Absolute dates:**
+- `2026-01-15` (ISO format)
+- `January 15`, `Jan 15, 2026`
+- `15 Jan`, `15 January 2026`
+
+**Examples:**
+```
+due before next Friday                          # Tasks due before next Friday
+scheduled in the next 7 days                    # Use: scheduled before in 7 days
+due after tomorrow AND priority high            # Combining with other filters
+start between today and in 2 weeks              # Two week window
+created after January 1, 2026                   # Using month names
 ```
 
 Supported date fields:
@@ -156,16 +198,25 @@ limit to 25 tasks             # Limit to 25 results
 
 ## Date Values
 
-The query language supports various date formats:
+The query language supports comprehensive natural language date parsing powered by chrono-node, as well as ISO format dates.
 
 ### Relative Dates
 - `today`, `tomorrow`, `yesterday`
-- `next week`, `last week`
-- `in 3 days`, `3 days ago`
-- `next Monday`, `last Friday`
+- `next week`, `last week`, `this week`
+- `next month`, `last month`, `this month`
+- `in 3 days`, `in 2 weeks`, `in 1 month`
+- `3 days ago`, `2 weeks ago`, `1 month ago`
+- `next Monday`, `last Friday` (any day of the week)
+- `two weeks from now` (alternative phrasing)
 
 ### Absolute Dates
 - `2025-01-20` (ISO format: YYYY-MM-DD)
+- `January 15`, `Jan 15` (month and day)
+- `January 15, 2026`, `Jan 15, 2026` (full date with year)
+- `15 Jan`, `15 January` (day first format)
+
+### Date Normalization
+All dates are normalized to midnight (00:00:00) for consistent comparison. This ensures that queries like `due on today` match tasks regardless of their time component.
 
 ## Query Examples
 
@@ -236,6 +287,16 @@ due after today
 due before next week
 sort by due
 
+# Tasks due in the next 7 days with natural language
+not done
+due between today and in 7 days
+sort by due
+
+# Tasks due between specific dates
+not done
+due between 2026-01-20 and 2026-01-30
+group by priority
+
 # Recurring tasks with tags
 is recurring
 has tags
@@ -251,6 +312,40 @@ heading includes Work
 not done
 group by heading
 sort by priority
+
+# Tasks scheduled for next week using natural language
+scheduled between next Monday and next Friday
+not done
+sort by priority
+
+# Overdue tasks (before today) that are high priority
+due before today
+priority is high
+not done
+sort by due
+```
+
+### Natural Language Date Examples
+```
+# Tasks due next Friday
+due on next Friday
+not done
+
+# Tasks due in the next two weeks
+due between today and in 14 days
+not done
+
+# Tasks created in January
+created between January 1 and January 31
+group by priority
+
+# Tasks scheduled for this week
+scheduled between this week and next week
+not done
+
+# Tasks due tomorrow or day after
+due between tomorrow and in 2 days
+priority above medium
 ```
 
 ## Tips and Best practices
