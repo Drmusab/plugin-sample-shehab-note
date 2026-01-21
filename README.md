@@ -15,6 +15,24 @@ A powerful recurring task management plugin for Shehab-Note (SiYuan fork) with a
 - **All Tasks View** - Comprehensive task management with enable/disable toggles
 - **Timeline View** - Visual calendar showing upcoming tasks for the next 30 days
 
+### 📅 Natural Language Date Parsing (NEW)
+Create tasks faster by typing dates naturally:
+
+- **Relative dates**: `tomorrow`, `in 3 days`, `next week`, `next month`
+- **Named days**: `Monday`, `next Friday`, `last Tuesday`  
+- **Specific dates**: `Jan 15`, `2024-01-15`, `March 3rd`
+- **Times**: `at 9am`, `2:30pm`, `14:00`
+- **Combined**: `tomorrow at 3pm`, `next Friday at 9am`
+- **Shortcuts**: `eod` (end of day), `eow` (end of week), `eom` (end of month)
+
+**Features:**
+- 🎯 **Smart autocomplete** - Intelligent suggestions as you type
+- ⌨️ **Keyboard shortcuts** - Quick date entry (Ctrl/Cmd+T for today, Ctrl/Cmd+M for tomorrow)
+- ✓ **Real-time validation** - Visual feedback shows parsed dates instantly
+- 🔄 **Fallback date picker** - Traditional date/time picker always available
+
+See [Natural Language Dates Documentation](docs/NATURAL_LANGUAGE_DATES.md) for complete reference.
+
 ### 🤖 AI-Driven Features (NEW)
 - **Smart Suggestions** - AI-powered recommendations based on completion patterns
   - Abandonment detection for never-completed tasks
