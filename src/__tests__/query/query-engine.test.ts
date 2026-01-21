@@ -37,7 +37,7 @@ describe('QueryEngine', () => {
       {
         ...createTask('Task 4', { type: 'daily', interval: 1 }),
         statusSymbol: ' ',
-        priority: 'urgent',
+        priority: 'highest',
         tags: ['#work'],
         dueAt: new Date('2025-01-10').toISOString(),
       },
@@ -123,14 +123,14 @@ describe('QueryEngine', () => {
       const result = engine.executeString('priority above normal');
       
       expect(result.tasks.length).toBeGreaterThan(0);
-      expect(result.tasks.every(t => t.priority === 'high' || t.priority === 'urgent')).toBe(true);
+      expect(result.tasks.every(t => t.priority === 'medium' || t.priority === 'high' || t.priority === 'highest')).toBe(true);
     });
 
     it('should filter by priority below high', () => {
       const result = engine.executeString('priority below high');
       
       expect(result.tasks.length).toBeGreaterThan(0);
-      expect(result.tasks.every(t => t.priority === 'low' || t.priority === 'normal')).toBe(true);
+      expect(result.tasks.every(t => t.priority === 'low' || t.priority === 'normal' || t.priority === 'medium')).toBe(true);
     });
   });
 
@@ -193,8 +193,8 @@ describe('QueryEngine', () => {
       const result = engine.executeString('sort by priority');
       
       const priorities = result.tasks.map(t => t.priority);
-      // low < normal < high < urgent
-      expect(priorities).toEqual(['low', 'normal', 'high', 'urgent']);
+      // low < normal < high < highest
+      expect(priorities).toEqual(['low', 'normal', 'high', 'highest']);
     });
   });
 
@@ -214,7 +214,7 @@ describe('QueryEngine', () => {
       const result = engine.executeString('group by priority');
       
       expect(result.groups).toBeDefined();
-      expect(result.groups?.size).toBe(4); // low, normal, high, urgent
+      expect(result.groups?.size).toBe(4); // low, normal, high, highest
     });
 
     it('should group by due date', () => {
@@ -263,7 +263,7 @@ limit 2`;
       
       expect(result.tasks).toHaveLength(2);
       expect(result.tasks.every(t => t.statusSymbol !== 'x')).toBe(true);
-      expect(result.tasks.every(t => t.priority === 'high' || t.priority === 'urgent')).toBe(true);
+      expect(result.tasks.every(t => t.priority === 'high' || t.priority === 'highest')).toBe(true);
     });
 
     it('should combine filters with grouping', () => {
@@ -285,7 +285,7 @@ group by priority`;
         largeTasks.push({
           ...createTask(`Task ${i}`, { type: 'daily', interval: 1 }),
           statusSymbol: i % 2 === 0 ? ' ' : 'x',
-          priority: ['low', 'normal', 'high', 'urgent'][i % 4] as any,
+          priority: ['lowest', 'low', 'normal', 'medium', 'high', 'highest'][i % 6] as any,
           dueAt: new Date(2025, 0, (i % 30) + 1).toISOString(),
         });
       }

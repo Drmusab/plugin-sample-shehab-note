@@ -38,7 +38,7 @@ export const PRIORITY_ORDER: Record<string, number> = {
   highest: 1,
   high: 2,
   medium: 3,
-  none: 4,
+  normal: 4,
   low: 5,
   lowest: 6,
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { calculateTaskHealth, recordCompletion, recordMiss, createTask } from "../core/models/Task";
+import { calculateTaskHealth, calculateTaskUrgency, recordCompletion, recordMiss, createTask } from "../core/models/Task";
 import type { Task } from "../core/models/Task";
 
 describe("Task Model", () => {
@@ -214,6 +214,49 @@ describe("Task Model", () => {
       
       const health = calculateTaskHealth(task);
       expect(health).toBeLessThanOrEqual(20);
+    });
+  });
+
+  describe("calculateTaskUrgency", () => {
+    it("returns higher urgency for overdue tasks", () => {
+      const task = createTask(
+        "Overdue Task",
+        { type: "daily", interval: 1, time: "09:00" }
+      );
+      task.dueAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+      task.priority = "normal";
+
+      const urgency = calculateTaskUrgency(task, new Date());
+      expect(urgency).toBeGreaterThanOrEqual(80);
+    });
+
+    it("favors higher priority when due dates match", () => {
+      const dueDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const lowTask = createTask(
+        "Low Priority",
+        { type: "daily", interval: 1, time: "09:00" }
+      );
+      lowTask.dueAt = dueDate;
+      lowTask.priority = "low";
+
+      const highTask = createTask(
+        "High Priority",
+        { type: "daily", interval: 1, time: "09:00" }
+      );
+      highTask.dueAt = dueDate;
+      highTask.priority = "highest";
+
+      expect(calculateTaskUrgency(highTask)).toBeGreaterThan(calculateTaskUrgency(lowTask));
+    });
+
+    it("returns zero for completed tasks", () => {
+      const task = createTask(
+        "Completed Task",
+        { type: "daily", interval: 1, time: "09:00" }
+      );
+      task.status = "done";
+
+      expect(calculateTaskUrgency(task)).toBe(0);
     });
   });
 });

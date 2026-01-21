@@ -1,5 +1,5 @@
 import type { Frequency } from "@/core/models/Frequency";
-import type { Task } from "@/core/models/Task";
+import type { Task, TaskPriority } from "@/core/models/Task";
 
 export type TaskEventType =
   | "task.due"
@@ -49,7 +49,7 @@ export interface TaskSnapshot {
   frequency: Frequency;
   linkedBlockId?: string;
   linkedBlockContent?: string;
-  priority?: "low" | "normal" | "high" | "urgent";
+  priority?: TaskPriority;
   tags?: string[];
   notificationChannels?: string[];
   completionCount?: number;

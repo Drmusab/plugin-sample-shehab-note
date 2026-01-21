@@ -1,5 +1,6 @@
 import type { Task } from '@/core/models/Task';
 import { EMOJI_SIGNIFIERS, getPriorityEmoji, type TaskFormat } from '@/utils/signifiers';
+import { normalizePriority } from '@/core/models/Task';
 import { DateParser } from './DateParser';
 
 export interface SerializeOptions {
@@ -22,8 +23,9 @@ export class TaskLineSerializer {
 
     if (options.format === 'emoji') {
       // Priority
-      if (task.priority && task.priority !== 'normal') {
-        const emoji = getPriorityEmoji(task.priority);
+      if (task.priority) {
+        const normalized = normalizePriority(task.priority) || 'normal';
+        const emoji = normalized !== 'normal' ? getPriorityEmoji(normalized) : undefined;
         if (emoji) parts.push(emoji);
       }
 
@@ -78,8 +80,11 @@ export class TaskLineSerializer {
       }
     } else {
       // Text format [field:: value]
-      if (task.priority && task.priority !== 'normal') {
-        parts.push(`[priority:: ${task.priority}]`);
+      if (task.priority) {
+        const normalized = normalizePriority(task.priority) || 'normal';
+        if (normalized !== 'normal') {
+          parts.push(`[priority:: ${normalized}]`);
+        }
       }
       if (task.recurrenceText) {
         parts.push(`[repeat:: ${task.recurrenceText}]`);

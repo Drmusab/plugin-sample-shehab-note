@@ -1,5 +1,5 @@
 <script lang="ts">
-  type Priority = "low" | "normal" | "high" | "urgent";
+  type Priority = "lowest" | "low" | "normal" | "medium" | "high" | "highest";
 
   interface Props {
     value: Priority;
@@ -9,10 +9,12 @@
   let { value = $bindable("normal"), onchange }: Props = $props();
 
   const priorities: Array<{ value: Priority; label: string; emoji: string; color: string }> = [
-    { value: "urgent", label: "Urgent", emoji: "🔴", color: "var(--b3-theme-error, #ff4444)" },
-    { value: "high", label: "High", emoji: "🟠", color: "#ff8800" },
-    { value: "normal", label: "Normal", emoji: "🟡", color: "#ffcc00" },
-    { value: "low", label: "Low", emoji: "🟢", color: "#44cc44" },
+    { value: "highest", label: "Highest", emoji: "🔺", color: "var(--b3-theme-error, #ef4444)" },
+    { value: "high", label: "High", emoji: "⏫", color: "#f97316" },
+    { value: "medium", label: "Medium", emoji: "🔼", color: "#f59e0b" },
+    { value: "normal", label: "Normal", emoji: "🟡", color: "#eab308" },
+    { value: "low", label: "Low", emoji: "🔽", color: "#22c55e" },
+    { value: "lowest", label: "Lowest", emoji: "⏬", color: "#64748b" },
   ];
 
   function handleChange(newValue: Priority) {

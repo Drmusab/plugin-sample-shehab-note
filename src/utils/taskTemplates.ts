@@ -1,4 +1,5 @@
 import type { FrequencyType } from "@/core/models/Frequency";
+import type { TaskPriority } from "@/core/models/Task";
 
 export interface TaskTemplate {
   id: string;
@@ -12,7 +13,7 @@ export interface TaskTemplate {
   month: number;
   enabled: boolean;
   linkedBlockId?: string;
-  priority: "low" | "normal" | "high";
+  priority: TaskPriority;
   tags: string[];
 }
 

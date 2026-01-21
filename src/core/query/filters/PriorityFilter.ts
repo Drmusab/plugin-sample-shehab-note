@@ -1,38 +1,36 @@
 import { Filter } from './FilterBase';
-import type { Task } from '@/core/models/Task';
+import type { Task, TaskPriority } from '@/core/models/Task';
+import { normalizePriority } from '@/core/models/Task';
 
 // Type for priorities as defined in Task model
-export type Priority = 'low' | 'normal' | 'high' | 'urgent';
+export type Priority = TaskPriority;
 
 // Type for spec-defined priority levels (for query language)
-export type PriorityLevel = 'lowest' | 'low' | 'none' | 'normal' | 'medium' | 'high' | 'highest' | 'urgent';
+export type PriorityLevel = TaskPriority | 'none' | 'urgent';
 
 // Priority weight mapping
-const PRIORITY_WEIGHTS: Record<PriorityLevel, number> = {
-  'lowest': 0,
-  'low': 1,
-  'none': 2,
-  'normal': 2,
-  'medium': 2,
-  'high': 3,
-  'highest': 4,
-  'urgent': 4,
+const PRIORITY_WEIGHTS: Record<TaskPriority, number> = {
+  lowest: 0,
+  low: 1,
+  normal: 2,
+  medium: 3,
+  high: 4,
+  highest: 5,
 };
 
 // Map Task priority to PriorityLevel
-function mapToPriorityLevel(p: Priority | undefined): PriorityLevel {
-  switch (p) {
-    case 'low':
-      return 'low';
-    case 'normal':
-      return 'normal';
-    case 'high':
-      return 'high';
-    case 'urgent':
-      return 'urgent';
-    default:
-      return 'normal';
+function mapToPriorityLevel(p: string | undefined): TaskPriority {
+  return normalizePriority(p) ?? 'normal';
+}
+
+function normalizeLevel(level: PriorityLevel): TaskPriority {
+  if (level === 'urgent') {
+    return 'highest';
   }
+  if (level === 'none') {
+    return 'normal';
+  }
+  return level;
 }
 
 export class PriorityFilter extends Filter {
@@ -46,7 +44,7 @@ export class PriorityFilter extends Filter {
   matches(task: Task): boolean {
     const taskPriority = mapToPriorityLevel(task.priority);
     const taskWeight = PRIORITY_WEIGHTS[taskPriority];
-    const targetWeight = PRIORITY_WEIGHTS[this.level];
+    const targetWeight = PRIORITY_WEIGHTS[normalizeLevel(this.level)];
 
     switch (this.operator) {
       case 'is':

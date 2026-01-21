@@ -1,4 +1,5 @@
 import type { Task } from '@/core/models/Task';
+import { normalizePriority } from '@/core/models/Task';
 import type { QueryAST, FilterNode, SortNode, GroupNode } from './QueryParser';
 import { QueryParser } from './QueryParser';
 import { QueryExecutionError } from './QueryError';
@@ -278,13 +279,15 @@ export class QueryEngine {
 
   private comparePriorities(a: string | undefined, b: string | undefined): number {
     const weights: Record<string, number> = {
+      lowest: 0,
       low: 1,
       normal: 2,
-      high: 3,
-      urgent: 4,
+      medium: 3,
+      high: 4,
+      highest: 5,
     };
-    const weightA = weights[a || 'normal'] || 2;
-    const weightB = weights[b || 'normal'] || 2;
+    const weightA = weights[normalizePriority(a) || 'normal'] || 2;
+    const weightB = weights[normalizePriority(b) || 'normal'] || 2;
     return weightA - weightB;
   }
 

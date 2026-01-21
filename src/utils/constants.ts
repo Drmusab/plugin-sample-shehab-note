@@ -89,10 +89,12 @@ export const SNOOZE_OPTIONS = [
  * Priority colors
  */
 export const PRIORITY_COLORS = {
+  lowest: "#94a3b8",
   low: "#64748b",
   normal: "#3b82f6",
-  high: "#f59e0b",
-  urgent: "#ef4444",
+  medium: "#f59e0b",
+  high: "#f97316",
+  highest: "#ef4444",
 };
 
 /**

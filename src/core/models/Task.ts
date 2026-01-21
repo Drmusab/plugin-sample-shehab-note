@@ -31,7 +31,7 @@ export interface Task {
   linkedBlockContent?: string;
 
   /** Priority for routing */
-  priority?: "low" | "normal" | "high" | "urgent";
+  priority?: TaskPriority;
 
   /** Tags for routing */
   tags?: string[];
@@ -169,6 +169,27 @@ export function createTask(
   };
 }
 
+export type TaskPriority = "lowest" | "low" | "normal" | "medium" | "high" | "highest";
+
+const PRIORITY_LEVELS: TaskPriority[] = ["lowest", "low", "normal", "medium", "high", "highest"];
+
+export function normalizePriority(priority?: string | null): TaskPriority | undefined {
+  if (!priority) {
+    return undefined;
+  }
+  const key = priority.toLowerCase();
+  if (key === "urgent") {
+    return "highest";
+  }
+  if (key === "none") {
+    return "normal";
+  }
+  if (PRIORITY_LEVELS.includes(key as TaskPriority)) {
+    return key as TaskPriority;
+  }
+  return undefined;
+}
+
 /**
  * Generates a unique task ID
  */
@@ -296,21 +317,79 @@ export function calculateTaskHealth(task: Task): number {
 }
 
 /**
+ * Calculate task urgency score (0-100)
+ * Based on due date proximity, priority, and recent misses/snoozes.
+ */
+export function calculateTaskUrgency(task: Task, now: Date = new Date()): number {
+  if (!isTaskActive(task)) {
+    return 0;
+  }
+
+  const dueDate = new Date(task.dueAt);
+  if (Number.isNaN(dueDate.getTime())) {
+    return 0;
+  }
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysUntilDue = (dueDate.getTime() - now.getTime()) / msPerDay;
+
+  let timeScore = 10;
+  if (daysUntilDue < 0) {
+    timeScore = 80 + Math.min(20, Math.abs(daysUntilDue) * 2);
+  } else if (daysUntilDue <= 1) {
+    timeScore = 70;
+  } else if (daysUntilDue <= 3) {
+    timeScore = 55;
+  } else if (daysUntilDue <= 7) {
+    timeScore = 40;
+  } else if (daysUntilDue <= 14) {
+    timeScore = 25;
+  }
+
+  const priority = task.priority ?? "normal";
+  const priorityBoosts: Record<TaskPriority, number> = {
+    lowest: 0,
+    low: 4,
+    normal: 8,
+    medium: 12,
+    high: 16,
+    highest: 20,
+  };
+
+  const missBoost = Math.min(10, (task.missCount || 0) * 2);
+  const snoozeBoost = Math.min(10, (task.snoozeCount || 0) * 2);
+  const score = timeScore + priorityBoosts[priority] + missBoost + snoozeBoost;
+
+  return Math.round(Math.max(0, Math.min(100, score)));
+}
+
+/**
  * Check if task is blocked by dependencies
  */
 export function isBlocked(task: Task, allTasks: Task[]): boolean {
-  if (!task.blockedBy || task.blockedBy.length === 0) {
+  const blockingIds = new Set([...(task.blockedBy ?? []), ...(task.dependsOn ?? [])]);
+  if (blockingIds.size === 0) {
     return false;
   }
   
   // Check if any blocking task is not completed
-  const blockingTasks = allTasks.filter(t => task.blockedBy?.includes(t.id));
-  return blockingTasks.some(t => {
-    // Check new status field first, fallback to enabled for backward compatibility
-    if (t.status) {
-      return t.status !== 'done';
+  const blockingTasks = allTasks.filter((t) => blockingIds.has(t.id));
+  return blockingTasks.some((t) => isTaskActive(t));
+}
+
+/**
+ * Check if task is blocking any other active task
+ */
+export function isBlocking(task: Task, allTasks: Task[]): boolean {
+  return allTasks.some((candidate) => {
+    if (candidate.id === task.id) {
+      return false;
     }
-    return t.enabled;
+    const blockingIds = new Set([...(candidate.blockedBy ?? []), ...(candidate.dependsOn ?? [])]);
+    if (!blockingIds.has(task.id)) {
+      return false;
+    }
+    return isTaskActive(candidate);
   });
 }
 

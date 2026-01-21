@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Task } from "@/core/models/Task";
+  import type { Task, TaskPriority } from "@/core/models/Task";
   import type { Frequency, FrequencyType } from "@/core/models/Frequency";
   import { RecurrenceEngine } from "@/core/engine/RecurrenceEngine";
   import { createTask } from "@/core/models/Task";
@@ -35,7 +35,7 @@
   let month = $state(new Date().getMonth());
   let enabled = $state(true);
   let linkedBlockId = $state("");
-  let priority = $state<"low" | "normal" | "high">("normal");
+  let priority = $state<TaskPriority>("normal");
   let tags = $state("");
   let templates = $state(loadTaskTemplates());
   let selectedTemplateId = $state("");
@@ -565,9 +565,12 @@
     <div class="task-form__field">
       <label class="task-form__label" for="task-priority">Priority</label>
       <select id="task-priority" class="task-form__select" bind:value={priority}>
-        <option value="low">Low</option>
-        <option value="normal">Normal</option>
+        <option value="highest">Highest</option>
         <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="normal">Normal</option>
+        <option value="low">Low</option>
+        <option value="lowest">Lowest</option>
       </select>
     </div>
 

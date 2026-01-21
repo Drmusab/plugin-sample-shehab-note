@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Task } from "@/core/models/Task";
-  import { calculateTaskHealth } from "@/core/models/Task";
+  import { calculateTaskHealth, normalizePriority } from "@/core/models/Task";
   import { tick } from "svelte";
   import { fetchBlockEmbed, fetchBlockPreview } from "@/utils/blocks";
   import { daysBetween, formatDateTime, isOverdue, isToday } from "@/utils/date";
@@ -41,9 +41,10 @@
     return `rgba(244, 67, 54, ${strength})`;
   });
 
-  const priorityColor = $derived(
-    task.priority ?  PRIORITY_COLORS[task. priority] :  PRIORITY_COLORS.normal
-  );
+  const priorityColor = $derived(() => {
+    const priority = normalizePriority(task.priority) || "normal";
+    return PRIORITY_COLORS[priority];
+  });
 
   const relativeTime = $derived(() => {
     if (timezoneHandler) {

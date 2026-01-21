@@ -46,7 +46,7 @@ describe('signifiers', () => {
       expect(PRIORITY_ORDER.highest).toBe(1);
       expect(PRIORITY_ORDER.high).toBe(2);
       expect(PRIORITY_ORDER.medium).toBe(3);
-      expect(PRIORITY_ORDER.none).toBe(4);
+      expect(PRIORITY_ORDER.normal).toBe(4);
       expect(PRIORITY_ORDER.low).toBe(5);
       expect(PRIORITY_ORDER.lowest).toBe(6);
     });
@@ -54,8 +54,8 @@ describe('signifiers', () => {
     it('should order priorities correctly', () => {
       expect(PRIORITY_ORDER.highest).toBeLessThan(PRIORITY_ORDER.high);
       expect(PRIORITY_ORDER.high).toBeLessThan(PRIORITY_ORDER.medium);
-      expect(PRIORITY_ORDER.medium).toBeLessThan(PRIORITY_ORDER.none);
-      expect(PRIORITY_ORDER.none).toBeLessThan(PRIORITY_ORDER.low);
+      expect(PRIORITY_ORDER.medium).toBeLessThan(PRIORITY_ORDER.normal);
+      expect(PRIORITY_ORDER.normal).toBeLessThan(PRIORITY_ORDER.low);
       expect(PRIORITY_ORDER.low).toBeLessThan(PRIORITY_ORDER.lowest);
     });
   });

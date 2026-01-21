@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Task } from "@/core/models/Task";
-  import { duplicateTask, recordMiss } from "@/core/models/Task";
+  import { duplicateTask, recordMiss, isBlocked, isBlocking, normalizePriority } from "@/core/models/Task";
   import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
   import type { Scheduler } from "@/core/engine/Scheduler";
   import type { EventService } from "@/services/EventService";
@@ -89,10 +89,16 @@
       tasks = tasks. filter((t) => t.status === "todo" && t.statusSymbol && t.statusSymbol !== " ");
     }
     if (quickFilters.has("blocked")) {
-      tasks = tasks. filter((t) => t.blockedBy && t.blockedBy.length > 0);
+      tasks = tasks.filter((t) => isBlocked(t, allTasks));
+    }
+    if (quickFilters.has("blocking")) {
+      tasks = tasks.filter((t) => isBlocking(t, allTasks));
     }
     if (quickFilters.has("highPriority")) {
-      tasks = tasks.filter((t) => t.priority === "high" || t.priority === "urgent");
+      tasks = tasks.filter((t) => {
+        const priority = normalizePriority(t.priority) || "normal";
+        return priority === "high" || priority === "highest";
+      });
     }
     
     return tasks;
@@ -552,6 +558,12 @@
           onclick={() => toggleQuickFilter('blocked')}
         >
           Blocked
+        </button>
+        <button
+          class="dashboard__filter-btn {quickFilters.has('blocking') ? 'active' : ''}"
+          onclick={() => toggleQuickFilter('blocking')}
+        >
+          Blocking
         </button>
         <button
           class="dashboard__filter-btn {quickFilters.has('highPriority') ? 'active' : ''}"

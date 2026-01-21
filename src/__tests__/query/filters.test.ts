@@ -113,19 +113,24 @@ describe('PriorityFilter', () => {
   it('should handle all priority levels correctly', () => {
     const lowestFilter = new PriorityFilter('is', 'lowest');
     const lowFilter = new PriorityFilter('is', 'low');
+    const normalFilter = new PriorityFilter('is', 'normal');
     const mediumFilter = new PriorityFilter('is', 'medium');
     const highFilter = new PriorityFilter('is', 'high');
     const highestFilter = new PriorityFilter('is', 'highest');
     
+    const lowestTask = createTestTask('Test', { priority: 'lowest' });
     const lowTask = createTestTask('Test', { priority: 'low' });
     const normalTask = createTestTask('Test', { priority: 'normal' });
+    const mediumTask = createTestTask('Test', { priority: 'medium' });
     const highTask = createTestTask('Test', { priority: 'high' });
-    const urgentTask = createTestTask('Test', { priority: 'urgent' });
+    const highestTask = createTestTask('Test', { priority: 'highest' });
     
+    expect(lowestFilter.matches(lowestTask)).toBe(true);
     expect(lowFilter.matches(lowTask)).toBe(true);
-    expect(mediumFilter.matches(normalTask)).toBe(true);
+    expect(normalFilter.matches(normalTask)).toBe(true);
+    expect(mediumFilter.matches(mediumTask)).toBe(true);
     expect(highFilter.matches(highTask)).toBe(true);
-    expect(highestFilter.matches(urgentTask)).toBe(true);
+    expect(highestFilter.matches(highestTask)).toBe(true);
   });
 
   it('should handle tasks with no priority (defaults to normal)', () => {
@@ -134,19 +139,9 @@ describe('PriorityFilter', () => {
     expect(filter.matches(task)).toBe(true);
   });
 
-  it('should correctly compare urgent as highest', () => {
+  it('should correctly compare highest above high', () => {
     const filter = new PriorityFilter('above', 'high');
-    const urgentTask = createTestTask('Test', { priority: 'urgent' });
-    expect(filter.matches(urgentTask)).toBe(true);
-  });
-
-  it('should handle priority comparisons with medium/normal equivalence', () => {
-    const mediumFilter = new PriorityFilter('is', 'medium');
-    const normalFilter = new PriorityFilter('is', 'normal');
-    const normalTask = createTestTask('Test', { priority: 'normal' });
-    
-    // Both medium and normal should match a normal priority task
-    expect(mediumFilter.matches(normalTask)).toBe(true);
-    expect(normalFilter.matches(normalTask)).toBe(true);
+    const highestTask = createTestTask('Test', { priority: 'highest' });
+    expect(filter.matches(highestTask)).toBe(true);
   });
 });

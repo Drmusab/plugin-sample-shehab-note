@@ -1,4 +1,5 @@
 import type { Task } from '@/core/models/Task';
+import { normalizePriority } from '@/core/models/Task';
 import { Status, StatusType } from '@/core/models/Status';
 import { StatusRegistry } from '@/core/models/StatusRegistry';
 import { EMOJI_SIGNIFIERS, type TaskFormat } from '@/utils/signifiers';
@@ -202,7 +203,10 @@ export class TaskLineParser {
     // Priority
     for (const [name, emoji] of Object.entries(EMOJI_SIGNIFIERS.priority)) {
       if (content.includes(emoji)) {
-        metadata.priority = name as Task['priority'];
+        const normalized = normalizePriority(name);
+        if (normalized) {
+          metadata.priority = normalized;
+        }
         description = description.replace(emoji, '');
         break;
       }
@@ -294,9 +298,15 @@ export class TaskLineParser {
         case 'oncompletion':
           metadata.onCompletion = value as 'keep' | 'delete';
           break;
-        case 'priority':
-          metadata.priority = value as Task['priority'];
+        case 'priority': {
+          const normalized = normalizePriority(value);
+          if (normalized) {
+            metadata.priority = normalized;
+          } else {
+            unknownFields.push(match[0]);
+          }
           break;
+        }
         case 'id':
           metadata.id = value;
           break;

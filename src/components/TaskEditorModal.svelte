@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import type { Task } from "@/core/models/Task";
+  import type { Task, TaskPriority } from "@/core/models/Task";
   import { createTask } from "@/core/models/Task";
   import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
   import type { Frequency } from "@/core/models/Frequency";
@@ -30,7 +30,7 @@
   // Form state
   let name = $state(task?.name || "");
   let description = $state(task?.description || "");
-  let priority = $state<"low" | "normal" | "high" | "urgent">(task?.priority || "normal");
+  let priority = $state<TaskPriority>(task?.priority || "normal");
   let status = $state<"todo" | "done" | "cancelled">(task?.status || "todo");
   let dueAt = $state(task?.dueAt ? new Date(task.dueAt).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16));
   let scheduledAt = $state(task?.scheduledAt ? new Date(task.scheduledAt).toISOString().slice(0, 16) : "");
@@ -80,7 +80,7 @@
     touched.recurrence = true;
   }
 
-  function handlePriorityChange(newPriority: "low" | "normal" | "high" | "urgent") {
+  function handlePriorityChange(newPriority: TaskPriority) {
     priority = newPriority;
   }
 
