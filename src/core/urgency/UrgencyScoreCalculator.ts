@@ -80,12 +80,13 @@ export function calculateUrgencyWithBreakdown(task: Task, options: UrgencyScoreO
   const priorityMultiplier = getPriorityMultiplier(normalizedPriority, settings);
 
   if (!task.dueAt) {
-    const score = settings.noDueDateScore;
+    const baseScore = settings.noDueDateScore;
+    const totalScore = baseScore * priorityMultiplier;
     return {
-      score: applyUrgencyCaps(score * priorityMultiplier, settings),
+      score: applyUrgencyCaps(totalScore, settings),
       breakdown: {
-        priorityContribution: score * (priorityMultiplier - 1),
-        dueDateContribution: score,
+        priorityContribution: totalScore - baseScore,  // Difference from base
+        dueDateContribution: baseScore,
         overdueContribution: 0
       }
     };
@@ -93,12 +94,13 @@ export function calculateUrgencyWithBreakdown(task: Task, options: UrgencyScoreO
 
   const dueDate = new Date(task.dueAt);
   if (Number.isNaN(dueDate.getTime())) {
-    const score = settings.noDueDateScore;
+    const baseScore = settings.noDueDateScore;
+    const totalScore = baseScore * priorityMultiplier;
     return {
-      score: applyUrgencyCaps(score * priorityMultiplier, settings),
+      score: applyUrgencyCaps(totalScore, settings),
       breakdown: {
-        priorityContribution: score * (priorityMultiplier - 1),
-        dueDateContribution: score,
+        priorityContribution: totalScore - baseScore,  // Difference from base
+        dueDateContribution: baseScore,
         overdueContribution: 0
       }
     };
@@ -122,13 +124,13 @@ export function calculateUrgencyWithBreakdown(task: Task, options: UrgencyScoreO
     ? settings.overdueBaseScore + daysOverdue * settings.overduePenaltyWeight
     : 0;
 
-  const beforePriority = baseDueScore + overduePenalty;
-  const score = beforePriority * priorityMultiplier;
+  const baseScore = baseDueScore + overduePenalty;
+  const totalScore = baseScore * priorityMultiplier;
   
   return {
-    score: applyUrgencyCaps(score, settings),
+    score: applyUrgencyCaps(totalScore, settings),
     breakdown: {
-      priorityContribution: beforePriority * (priorityMultiplier - 1),
+      priorityContribution: totalScore - baseScore,  // Difference from base
       dueDateContribution: baseDueScore,
       overdueContribution: overduePenalty
     }

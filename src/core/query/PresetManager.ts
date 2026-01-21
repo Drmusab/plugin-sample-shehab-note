@@ -167,6 +167,7 @@ export class PresetManager {
    */
   async reorderPresets(orderedIds: string[]): Promise<void> {
     const reordered: QueryPreset[] = [];
+    const orderedSet = new Set(orderedIds);  // O(1) lookup
     
     // Add presets in the specified order
     for (const id of orderedIds) {
@@ -178,7 +179,7 @@ export class PresetManager {
 
     // Add any presets not in the ordered list (shouldn't happen, but be safe)
     for (const preset of this.customPresets) {
-      if (!orderedIds.includes(preset.id)) {
+      if (!orderedSet.has(preset.id)) {
         reordered.push(preset);
       }
     }
