@@ -75,6 +75,45 @@ export interface PluginSettings {
   
   /** Display timezone for date rendering */
   displayTimezone?: string;
+
+  // Phase 3: Advanced Features
+  
+  /** Smart recurrence configuration */
+  smartRecurrence: SmartRecurrenceSettings;
+  
+  /** Natural language input configuration */
+  naturalLanguage: NaturalLanguageSettings;
+  
+  /** Cross-note dependencies configuration */
+  crossNoteDependencies: CrossNoteDependenciesSettings;
+}
+
+/**
+ * Smart recurrence settings (Phase 3)
+ */
+export interface SmartRecurrenceSettings {
+  enabled: boolean;
+  autoAdjust: boolean;
+  minCompletionsForLearning: number;
+  confidenceThreshold: number;
+}
+
+/**
+ * Natural language settings (Phase 3)
+ */
+export interface NaturalLanguageSettings {
+  enabled: boolean;
+  showConfidenceScore: boolean;
+  provideExamples: boolean;
+}
+
+/**
+ * Cross-note dependencies settings (Phase 3)
+ */
+export interface CrossNoteDependenciesSettings {
+  enabled: boolean;
+  checkInterval: number; // minutes
+  notifyWhenMet: boolean;
 }
 
 /**
@@ -104,6 +143,22 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   globalFilter: DEFAULT_GLOBAL_FILTER_CONFIG,
   globalQuery: DEFAULT_GLOBAL_QUERY_CONFIG,
   urgency: DEFAULT_URGENCY_SETTINGS,
+  smartRecurrence: {
+    enabled: true,
+    autoAdjust: false,
+    minCompletionsForLearning: 10,
+    confidenceThreshold: 0.7,
+  },
+  naturalLanguage: {
+    enabled: true,
+    showConfidenceScore: true,
+    provideExamples: true,
+  },
+  crossNoteDependencies: {
+    enabled: true,
+    checkInterval: 5,
+    notifyWhenMet: true,
+  },
 };
 
 /**
@@ -143,6 +198,18 @@ export function mergeSettings(userSettings: Partial<PluginSettings>): PluginSett
     urgency: {
       ...DEFAULT_SETTINGS.urgency,
       ...userSettings.urgency,
+    },
+    smartRecurrence: {
+      ...DEFAULT_SETTINGS.smartRecurrence,
+      ...userSettings.smartRecurrence,
+    },
+    naturalLanguage: {
+      ...DEFAULT_SETTINGS.naturalLanguage,
+      ...userSettings.naturalLanguage,
+    },
+    crossNoteDependencies: {
+      ...DEFAULT_SETTINGS.crossNoteDependencies,
+      ...userSettings.crossNoteDependencies,
     },
   };
 }

@@ -138,6 +138,73 @@ export interface Task {
 
   /** Unrecognized line metadata preserved for lossless serialization */
   unknownFields?: string[];
+
+  // Phase 3: Smart Recurrence (ML-Based Pattern Learning)
+  
+  /** Historical completion data for pattern learning */
+  completionHistory?: CompletionHistoryEntry[];
+  
+  /** Learning metrics from pattern analysis */
+  learningMetrics?: {
+    averageDelayMinutes: number;
+    optimalHour: number;
+    consistencyScore: number;
+    lastLearningUpdate: string;
+  };
+  
+  /** Smart recurrence configuration */
+  smartRecurrence?: {
+    enabled: boolean;
+    autoAdjust: boolean;
+    minDataPoints: number;  // minimum completions before suggestions
+    confidenceThreshold: number; // 0-1
+  };
+
+  // Phase 3: Cross-Note Dependencies
+  
+  /** Dependencies on other SiYuan notes/blocks */
+  crossNoteDependencies?: CrossNoteDependency[];
+}
+
+/**
+ * Completion history entry for pattern learning
+ */
+export interface CompletionHistoryEntry {
+  scheduledFor: string;
+  completedAt: string;
+  delayMinutes: number;
+  dayOfWeek: number;
+  context: {
+    location?: string;
+    tags: string[];
+    relatedBlocks: string[];
+  };
+}
+
+/**
+ * Cross-note dependency configuration
+ */
+export interface CrossNoteDependency {
+  id: string;
+  type: 'blockExists' | 'blockContent' | 'noteAttribute' | 'tagPresence' | 'backlinks';
+  target: {
+    blockId?: string;
+    notePath?: string;
+    attribute?: string;
+    tag?: string;
+  };
+  condition: DependencyCondition;
+  status: 'met' | 'unmet' | 'checking';
+  lastChecked: string;
+}
+
+/**
+ * Dependency condition for evaluation
+ */
+export interface DependencyCondition {
+  operator: 'exists' | 'equals' | 'contains' | 'greaterThan' | 'lessThan' | 'matches';
+  value?: string | number;
+  caseSensitive?: boolean;
 }
 
 /**
@@ -254,6 +321,7 @@ export function isTask(obj: unknown): obj is Task {
  */
 export function recordCompletion(task: Task): void {
   const now = new Date().toISOString();
+  const nowDate = new Date(now);
   
   // Update completion count
   task.completionCount = (task.completionCount || 0) + 1;
@@ -271,6 +339,34 @@ export function recordCompletion(task: Task): void {
   // Keep only the most recent completions
   if (task.recentCompletions.length > MAX_RECENT_COMPLETIONS) {
     task.recentCompletions = task.recentCompletions.slice(-MAX_RECENT_COMPLETIONS);
+  }
+  
+  // Phase 3: Track completion history for pattern learning
+  if (task.smartRecurrence?.enabled) {
+    if (!task.completionHistory) {
+      task.completionHistory = [];
+    }
+    
+    const scheduledDate = new Date(task.dueAt);
+    const delayMinutes = Math.round((nowDate.getTime() - scheduledDate.getTime()) / (1000 * 60));
+    
+    const historyEntry: CompletionHistoryEntry = {
+      scheduledFor: task.dueAt,
+      completedAt: now,
+      delayMinutes,
+      dayOfWeek: nowDate.getDay(),
+      context: {
+        tags: task.tags || [],
+        relatedBlocks: task.linkedBlockId ? [task.linkedBlockId] : []
+      }
+    };
+    
+    task.completionHistory.push(historyEntry);
+    
+    // Keep only the most recent 100 entries to avoid bloat
+    if (task.completionHistory.length > 100) {
+      task.completionHistory = task.completionHistory.slice(-100);
+    }
   }
   
   // Reset snooze count
