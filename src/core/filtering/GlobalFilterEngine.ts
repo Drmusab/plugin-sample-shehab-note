@@ -50,11 +50,12 @@ export class GlobalFilterEngine {
       this.evaluateRule(rule, blockContent, blockPath)
     );
 
+    const allMatch = matches.every(m => m);
     const anyMatch = matches.some(m => m);
 
-    // Include mode: pass if ANY rule matches
-    // Exclude mode: pass if NO rule matches
-    return this.config.mode === 'include' ? anyMatch : !anyMatch;
+    // Include mode: pass if ALL rules match (AND logic)
+    // Exclude mode: pass if NO rule matches (NOR logic)
+    return this.config.mode === 'include' ? allMatch : !anyMatch;
   }
 
   /**
@@ -86,7 +87,16 @@ export class GlobalFilterEngine {
 
       case 'regex':
         try {
-          const regex = new RegExp(rule.pattern);
+          // Parse regex pattern with flags if provided (e.g., /pattern/flags)
+          const regexMatch = rule.pattern.match(/^\/(.+)\/([gimsuy]*)$/);
+          let regex: RegExp;
+          if (regexMatch) {
+            // Pattern with flags: /pattern/flags
+            regex = new RegExp(regexMatch[1], regexMatch[2]);
+          } else {
+            // Plain pattern without slashes
+            regex = new RegExp(rule.pattern);
+          }
           return regex.test(content);
         } catch {
           return false; // Invalid regex = no match
@@ -132,8 +142,9 @@ export class GlobalFilterEngine {
     const matches = activeRules.map(rule =>
       this.evaluateRule(rule, content, path)
     );
+    const allMatch = matches.every(m => m);
     const anyMatch = matches.some(m => m);
-    return this.config.mode === 'include' ? anyMatch : !anyMatch;
+    return this.config.mode === 'include' ? allMatch : !anyMatch;
   }
 
   /**
