@@ -234,6 +234,7 @@ describe('PatternAnalyzer', () => {
 
     it('should not flag healthy tasks', () => {
       const task = createTask(15, 5);
+      task.currentStreak = 3; // Has a healthy streak
       const result = analyzer.detectSkipPatterns(task);
 
       expect(result.isAnomalous).toBe(false);

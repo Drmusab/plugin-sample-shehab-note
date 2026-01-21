@@ -27,6 +27,7 @@
   import DoneTab from "./tabs/DoneTab.svelte";
   import ProjectsTab from "./tabs/ProjectsTab.svelte";
   import SearchTab from "./tabs/SearchTab.svelte";
+  import InsightsTab from "./tabs/InsightsTab.svelte";
   import TaskEditorModal from "./TaskEditorModal.svelte";
   import Settings from "./settings/Settings.svelte";
 
@@ -47,7 +48,7 @@
   const timezoneHandler = scheduler.getTimezoneHandler();
   const recurrenceEngine = scheduler.getRecurrenceEngine();
 
-  type TabType = "inbox" | "today" | "upcoming" | "done" | "projects" | "search" | "all" | "timeline" | "analytics";
+  type TabType = "inbox" | "today" | "upcoming" | "done" | "projects" | "search" | "all" | "timeline" | "analytics" | "insights";
   let activeTab = $state<TabType>("today");
   let showTaskForm = $state(false);
   let showSettings = $state(false);
@@ -61,7 +62,7 @@
   let todayTasks = $derived(getTodayAndOverdueTasks(allTasks));
   let isRefreshing = $state(false);
   const panelLabelId = $derived(
-    ["inbox", "today", "upcoming", "done", "projects", "search", "all"]. includes(activeTab)
+    ["inbox", "today", "upcoming", "done", "projects", "search", "all", "insights"]. includes(activeTab)
       ? `dashboard-tab-${activeTab}`
       : undefined
   );
@@ -538,9 +539,19 @@
         📝 All
         <span class="dashboard__tab-badge">{allTasks.length}</span>
       </button>
+      <button
+        id="dashboard-tab-insights"
+        class="dashboard__tab {activeTab === 'insights' ? 'active' : ''}"
+        role="tab"
+        aria-selected={activeTab === "insights"}
+        aria-controls="dashboard-panel"
+        onclick={() => (activeTab = "insights")}
+      >
+        💡 Insights
+      </button>
     </div>
 
-    {#if activeTab !== "search" && activeTab !== "timeline" && activeTab !== "analytics"}
+    {#if activeTab !== "search" && activeTab !== "timeline" && activeTab !== "analytics" && activeTab !== "insights"}
       <div class="dashboard__filters">
         <span class="dashboard__filters-label">Quick Filters: </span>
         <button
@@ -657,6 +668,36 @@
         />
       {:else if activeTab === "analytics"}
         <AnalyticsTab tasks={allTasks} />
+      {:else if activeTab === "insights"}
+        <InsightsTab
+          tasks={allTasks}
+          onApplySuggestion={async (task, suggestion) => {
+            // Apply the suggested schedule
+            const updatedTask = {
+              ...task,
+              frequency: suggestion.suggestedSchedule.frequency,
+              dueAt: suggestion.suggestedSchedule.time 
+                ? (() => {
+                    const date = new Date(task.dueAt);
+                    const [hours, minutes] = suggestion.suggestedSchedule.time.split(':').map(Number);
+                    date.setHours(hours, minutes || 0, 0, 0);
+                    return date.toISOString();
+                  })()
+                : task.dueAt,
+              updatedAt: new Date().toISOString()
+            };
+            
+            allTasks = upsertTask(allTasks, updatedTask);
+            toast.success(`Schedule updated for "${task.name}"`);
+            
+            try {
+              await repository.saveTask(updatedTask);
+            } catch (err) {
+              toast.error("Failed to save schedule update: " + err);
+              loadTasksFromStorage("external");
+            }
+          }}
+        />
       {/if}
     </div>
   {/if}
