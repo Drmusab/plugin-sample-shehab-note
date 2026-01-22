@@ -1,3 +1,4 @@
+[file content begin]
 import { QuerySyntaxError } from './QueryError';
 import { StatusType } from '@/core/models/Status';
 import type { DateField, DateComparator } from './filters/DateFilter';
@@ -13,6 +14,10 @@ export interface QueryAST {
   group?: GroupNode;
   limit?: number;
   explain?: boolean;
+  
+  // NEW: Override directives
+  overrideGlobalFilter?: boolean;
+  useProfile?: string;
 }
 
 export interface FilterNode {
@@ -48,7 +53,35 @@ export class QueryParser {
    * @throws QuerySyntaxError with helpful error message
    */
   parse(queryString: string, referenceDate: Date = new Date()): QueryAST {
-    this.input = queryString.trim();
+    // Extract directives first
+    let text = queryString.trim();
+    const directives: { overrideGlobalFilter?: boolean; useProfile?: string } = {};
+    
+    // Extract directives (special prefix syntax)
+    const lines = text.split('\n');
+    const filteredLines: string[] = [];
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      // @ignoreGlobalFilter directive
+      if (trimmed === '@ignoreGlobalFilter') {
+        directives.overrideGlobalFilter = true;
+        continue;
+      }
+      
+      // @profile <name> directive
+      const profileMatch = trimmed.match(/^@profile\s+(.+)$/);
+      if (profileMatch) {
+        directives.useProfile = profileMatch[1].trim();
+        continue;
+      }
+      
+      filteredLines.push(line);
+    }
+    
+    // Continue with existing parsing logic on filtered text
+    this.input = filteredLines.join('\n').trim();
     this.position = 0;
     this.line = 1;
     this.column = 1;
@@ -59,12 +92,12 @@ export class QueryParser {
     };
 
     // Parse line by line
-    const lines = this.input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const astLines = this.input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     
-    for (let i = 0; i < lines.length; i++) {
+    for (let i = 0; i < astLines.length; i++) {
       this.line = i + 1;
       this.column = 1;
-      const line = lines[i];
+      const line = astLines[i];
 
       if (line.startsWith('sort by ')) {
         ast.sort = this.parseSortInstruction(line);
@@ -83,7 +116,8 @@ export class QueryParser {
       }
     }
 
-    return ast;
+    // Merge directives into the AST
+    return { ...ast, ...directives };
   }
 
   /**
