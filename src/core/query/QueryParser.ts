@@ -627,6 +627,15 @@ export class QueryParser {
       return { type: 'done', operator: 'is', value: false };
     }
     
+    // Special case: "not X regex" patterns should be handled by atomic filter parsing
+    // Check these before general NOT parsing
+    if (trimmed.startsWith('not description regex ') || 
+        trimmed.startsWith('not path regex ') || 
+        trimmed.startsWith('not tag regex ') ||
+        trimmed.startsWith('not tags regex ')) {
+      return this.parsePrimaryExpression(trimmed);
+    }
+    
     // Check for NOT prefix
     if (/^(not|NOT)\s+/i.test(trimmed)) {
       const cleanLine = trimmed.replace(/^(not|NOT)\s+/i, '').trim();
