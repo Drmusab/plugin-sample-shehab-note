@@ -56,11 +56,18 @@ export interface GlobalFilterConfig {
   enabled: boolean;
 
   /**
-   * Backward compatibility:
+   * Filtering mode:
    * - 'all' means don't filter by rules (but still may exclude by status if profile says so).
-   * - 'include' / 'exclude' supported if you still have old logic somewhere.
+   * - 'include' / 'exclude' supported for backward compatibility.
+   * - 'tag' means only include tasks with a specific global filter tag.
    */
-  mode: 'include' | 'exclude' | 'all';
+  mode: 'include' | 'exclude' | 'all' | 'tag';
+  
+  /** Global filter tag (e.g., "#task") - used when mode is 'tag' */
+  tag?: string;
+  
+  /** Auto-remove global filter tag from task description display */
+  removeFromDescription?: boolean;
 
   // NEW: Profile System
   activeProfileId: string;

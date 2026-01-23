@@ -270,12 +270,22 @@ export class GlobalFilter {
   /**
    * Call BEFORE parsing (raw block content)
    */
-  shouldTreatAsTask(blockContent: string, blockPath?:  string): boolean {
-    if (! this.compiled) return true;
+  shouldTreatAsTask(blockContent: string, blockPath?: string): boolean {
+    if (!this.config.enabled) return true;
+    
+    // Tag-based mode: check for global filter tag
+    if (this.config.mode === 'tag' && this.config.tag) {
+      const tags = this.extractTagsFromContent(blockContent);
+      const normalizedFilterTag = this.normalizeTag(this.config.tag);
+      return tags.some(tag => this.normalizeTag(tag) === normalizedFilterTag);
+    }
+    
+    // Profile-based filtering
+    if (!this.compiled) return true;
     
     // Extract tags from raw content for early filtering
-    const tags = this. extractTagsFromContent(blockContent);
-    const mockTask:  Partial<Task> = {
+    const tags = this.extractTagsFromContent(blockContent);
+    const mockTask: Partial<Task> = {
       name: blockContent,
       path: blockPath,
       tags,
@@ -288,7 +298,16 @@ export class GlobalFilter {
    * Call AFTER parsing (full task object)
    */
   shouldIncludeTask(task: Task): boolean {
-    if (!this. compiled) return true;
+    if (!this.config.enabled) return true;
+    
+    // Tag-based mode: check for global filter tag
+    if (this.config.mode === 'tag' && this.config.tag) {
+      const normalizedFilterTag = this.normalizeTag(this.config.tag);
+      return (task.tags || []).some(tag => this.normalizeTag(tag) === normalizedFilterTag);
+    }
+    
+    // Profile-based filtering
+    if (!this.compiled) return true;
     return this.compiled.matches(task);
   }
   
@@ -302,8 +321,12 @@ export class GlobalFilter {
     return this.compiled.explain(task);
   }
   
-  private extractTagsFromContent(content:  string): string[] {
-    return (content. match(/#[\w\/-]+/g) || []);
+  private extractTagsFromContent(content: string): string[] {
+    return (content.match(/#[\w\/-]+/g) || []);
+  }
+  
+  private normalizeTag(tag: string): string {
+    return tag.startsWith('#') ? tag.toLowerCase() : `#${tag}`.toLowerCase();
   }
   
   getConfig(): GlobalFilterConfig {
@@ -326,5 +349,18 @@ export class GlobalFilter {
    */
   reset(): void {
     this.updateConfig(DEFAULT_GLOBAL_FILTER_CONFIG);
+  }
+  
+  /**
+   * Remove global filter tag from task description (if removeFromDescription is true)
+   */
+  removeTagFromDescription(description: string): string {
+    if (!this.config.enabled || this.config.mode !== 'tag' || !this.config.tag || !this.config.removeFromDescription) {
+      return description;
+    }
+    
+    const normalizedFilterTag = this.normalizeTag(this.config.tag);
+    const tagPattern = new RegExp(`\\s*${normalizedFilterTag.replace('#', '\\#')}\\s*`, 'gi');
+    return description.replace(tagPattern, ' ').trim();
   }
 }

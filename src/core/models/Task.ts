@@ -4,6 +4,15 @@ import { MAX_RECENT_COMPLETIONS, CURRENT_SCHEMA_VERSION } from "@/utils/constant
 import { calculateUrgencyScore } from "@/core/urgency/UrgencyScoreCalculator";
 
 /**
+ * Custom action to take when task is completed
+ */
+export interface OnCompletionAction {
+  action: 'keep' | 'delete' | 'archive' | 'customTransition';
+  nextStatus?: 'todo' | 'done' | 'cancelled' | string;
+  customHandler?: string;
+}
+
+/**
  * Task entity representing a recurring task
  */
 export interface Task {
@@ -122,7 +131,7 @@ export interface Task {
   doneAt?: string;
 
   /** Action to take when task is completed */
-  onCompletion?: 'keep' | 'delete';
+  onCompletion?: 'keep' | 'delete' | OnCompletionAction;
 
   /** Calculate next recurrence from completion date instead of due date */
   whenDone?: boolean;

@@ -306,6 +306,9 @@ export class QueryParser {
     if (line === 'is blocking') {
       return { type: 'dependency', operator: 'is-blocking', value: true };
     }
+    if (line === 'is not blocking') {
+      return { type: 'dependency', operator: 'is-blocking', value: false };
+    }
 
     // Recurrence filters
     if (line === 'is recurring') {
