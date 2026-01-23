@@ -1,13 +1,27 @@
 import { Filter } from './FilterBase';
 import type { Task } from '@/core/models/Task';
+import { RegexMatcher } from '../utils/RegexMatcher';
 
 export class DescriptionFilter extends Filter {
+  private compiledRegex?: RegExp;
+
   constructor(
     private operator: 'includes' | 'does not include' | 'regex',
     private pattern: string,
     private caseSensitive = false
   ) {
     super();
+    
+    // Pre-compile regex in constructor for better performance
+    if (this.operator === 'regex') {
+      try {
+        const flags = this.caseSensitive ? '' : 'i';
+        this.compiledRegex = RegexMatcher.compile({ pattern: this.pattern, flags });
+      } catch {
+        // If regex compilation fails, we'll return false in matches()
+        this.compiledRegex = undefined;
+      }
+    }
   }
 
   matches(task: Task): boolean {
@@ -28,13 +42,10 @@ export class DescriptionFilter extends Filter {
         return !haystack.includes(needle);
       }
       case 'regex': {
-        try {
-          const flags = this.caseSensitive ? '' : 'i';
-          const regex = new RegExp(this.pattern, flags);
-          return regex.test(combinedText);
-        } catch {
+        if (!this.compiledRegex) {
           return false;
         }
+        return RegexMatcher.test(this.compiledRegex, combinedText);
       }
     }
   }
