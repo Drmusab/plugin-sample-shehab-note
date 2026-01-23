@@ -211,6 +211,14 @@ export class TaskIndex {
   }
 
   /**
+   * Get task by block ID
+   */
+  getByBlockId(blockId: string): Task | undefined {
+    const taskId = this.byBlockId.get(blockId);
+    return taskId ? this.byId.get(taskId) : undefined;
+  }
+
+  /**
    * Get all tasks
    */
   getAllTasks(): Task[] {

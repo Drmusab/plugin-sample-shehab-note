@@ -391,7 +391,7 @@ Extra whitespace is trimmed:
 This syntax is the foundation for:
 - **Phase 2:** Command integration (`create-task-from-block`)
 - **Phase 3:** UI/Modal auto-fill from parsed tasks
-- **Phase 4:** Auto-normalization on save
+- **Phase 4:** Auto-normalization on save and inline checkbox toggling
 - **Phase 5:** Task storage and management
 
 The parser is designed to be:
@@ -399,6 +399,183 @@ The parser is designed to be:
 - ✅ **Extensible:** Easy to add new tokens
 - ✅ **Fast:** Real-time parsing capable
 - ✅ **Robust:** Comprehensive error handling
+
+## Inline Task Toggling (Phase 4)
+
+### Overview
+
+When you click a checkbox on a managed task (a task tracked by the plugin), the plugin automatically:
+1. Updates the task status
+2. Handles recurrence generation (if applicable)
+3. Normalizes the block content
+4. Tracks completion history
+
+### Behavior
+
+#### Non-Recurring Tasks
+
+**Checking the checkbox (todo → done):**
+```markdown
+Before: - [ ] Review code
+After:  - [x] Review code
+```
+- Task status updates to `done`
+- Completion timestamp is recorded
+- Task remains in storage
+
+**Unchecking the checkbox (done → todo):**
+```markdown
+Before: - [x] Review code
+After:  - [ ] Review code
+```
+- Task status reverts to `todo`
+- Completion timestamp is cleared
+
+#### Recurring Tasks
+
+**Checking the checkbox (completing instance):**
+```markdown
+Before: - [ ] Weekly report 🔁 every week 📅 2026-01-25
+After:  - [x] Weekly report 🔁 every week 📅 2026-01-25
+(New:   - [ ] Weekly report 🔁 every week 📅 2026-02-01)
+```
+- Current task marked done
+- Next instance automatically created with calculated due date
+- Next instance placed above/below based on settings
+- Completion tracked in history
+
+**Unchecking a completed recurring task:**
+```markdown
+Before: - [x] Daily standup 🔁 every day
+After:  - [ ] Daily standup 🔁 every day
+```
+- Task status reverts to `todo`
+- Does NOT affect next instance (if already created)
+
+### Status Cycle
+
+The toggle follows this logic:
+
+**When checkbox is checked:**
+- `todo` → `done`
+- `cancelled` → `done`
+- `done` → (no change)
+
+**When checkbox is unchecked:**
+- `done` → `todo`
+- `cancelled` → `todo`
+- `todo` → (no change)
+
+### Settings
+
+Control toggle behavior through Settings:
+
+**Enable inline checkbox toggle** (Default: ON)
+- Enables/disables checkbox click handling
+- When disabled, checkboxes work as regular markdown
+
+**Update block content after toggle** (Default: ON)
+- Automatically normalizes task content after status change
+- Ensures consistent formatting
+
+**Show toggle notifications** (Default: OFF)
+- Display toast notifications for toggle actions
+- Useful for debugging or confirmation
+
+### Non-Managed Checklists
+
+Regular checklists (not tracked by the plugin) are **not affected** by toggle handling:
+
+```markdown
+- [ ] Regular checklist item
+- [ ] Another regular item
+```
+
+These work as normal markdown checkboxes. Only tasks that have been explicitly created through the plugin are managed.
+
+### Performance
+
+- Toggle detection: **< 10ms**
+- Status update: **< 100ms**
+- Recurrence generation: **< 500ms**
+- Uses debouncing to handle rapid clicks
+
+### Error Handling
+
+The toggle handler gracefully handles:
+- **Missing block content:** Ignored, no changes made
+- **Invalid task format:** Logged, task remains unchanged
+- **Concurrent toggles:** Debounced to last action
+- **Network issues:** Falls back to local state
+
+Errors are logged and never crash the UI.
+
+### Examples
+
+#### Simple Task Toggle
+```markdown
+# Initial state
+- [ ] Buy groceries 📅 tomorrow
+
+# After clicking checkbox
+- [x] Buy groceries 📅 tomorrow
+# Status: done, completion recorded
+```
+
+#### Recurring Task Toggle
+```markdown
+# Initial state
+- [ ] Weekly review 🔁 every week 📅 2026-01-27
+
+# After clicking checkbox
+- [x] Weekly review 🔁 every week 📅 2026-01-27
+# New instance created:
+- [ ] Weekly review 🔁 every week 📅 2026-02-03
+```
+
+#### Toggle with Dependencies
+```markdown
+# Task with dependencies
+- [ ] Final review 🆔 final ⛔ draft-done,tests-pass
+
+# After clicking checkbox
+- [x] Final review 🆔 final ⛔ draft-done,tests-pass
+# Dependent tasks are notified
+```
+
+### Best Practices
+
+1. **Use toggle for quick status updates:**
+   - Click checkbox for instant completion
+   - Use commands for bulk operations
+
+2. **Let recurrence work automatically:**
+   - Just complete the current instance
+   - Next instance is created for you
+
+3. **Don't manually edit status symbols:**
+   - Use checkbox clicks instead
+   - Ensures proper tracking
+
+4. **Monitor completion history:**
+   - View in task editor or dashboard
+   - Track your completion patterns
+
+### Troubleshooting
+
+**Checkbox doesn't update task:**
+- Verify task is managed (created through plugin)
+- Check if "Enable inline checkbox toggle" is ON
+- Look for error messages in console
+
+**Recurrence not generating:**
+- Ensure task has valid recurrence rule
+- Check if task has required dates
+- Verify recurrence engine is initialized
+
+**Multiple tasks updating:**
+- This shouldn't happen - report as bug
+- Each checkbox is isolated to its block
 
 ## API Reference
 

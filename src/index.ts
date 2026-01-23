@@ -26,6 +26,8 @@ import { InlineQueryController } from "./core/inline-query/InlineQueryController
 import { handleCreateTaskFromBlock } from "./commands/CreateTaskFromBlock";
 import { SiYuanApiAdapter } from "./core/api/SiYuanApiAdapter";
 import { AutoTaskCreator } from "./features/AutoTaskCreator";
+import { InlineToggleHandler } from "./commands/InlineToggleHandler";
+import { TaskCommands } from "./commands/TaskCommands";
 import "./index.scss";
 
 export default class RecurringTasksPlugin extends Plugin {
@@ -48,6 +50,8 @@ export default class RecurringTasksPlugin extends Plugin {
   private shortcutManager: ShortcutManager | null = null;
   private inlineQueryController: InlineQueryController | null = null;
   private autoTaskCreator: AutoTaskCreator | null = null;
+  private inlineToggleHandler: InlineToggleHandler | null = null;
+  private checkboxClickListener: ((event: MouseEvent) => void) | null = null;
 
   async onload() {
     logger.info("Loading Recurring Tasks Plugin");
@@ -443,6 +447,9 @@ export default class RecurringTasksPlugin extends Plugin {
     });
     this.setupAutoCreationEventHandlers();
 
+    // Initialize Inline Toggle Handler (Phase 4)
+    this.setupInlineToggleHandler();
+
     logger.info("Recurring Tasks Plugin loaded successfully");
   }
 
@@ -466,6 +473,17 @@ export default class RecurringTasksPlugin extends Plugin {
     // Cleanup auto task creator
     if (this.autoTaskCreator) {
       this.autoTaskCreator.cleanup();
+    }
+    
+    // Cleanup inline toggle handler
+    if (this.inlineToggleHandler) {
+      this.inlineToggleHandler.destroy();
+    }
+    
+    // Remove checkbox click listener
+    if (this.checkboxClickListener) {
+      document.removeEventListener('click', this.checkboxClickListener, true);
+      this.checkboxClickListener = null;
     }
     
     // Destroy dashboard
@@ -616,6 +634,62 @@ export default class RecurringTasksPlugin extends Plugin {
     document.addEventListener("focusout", this.autoCreationBlurHandler, true);
     
     logger.info("Auto-creation event handlers registered");
+  }
+
+  /**
+   * Setup inline toggle handler for checkbox clicks (Phase 4)
+   */
+  private setupInlineToggleHandler() {
+    const settings = this.settingsService.get();
+    
+    // Check if inline toggle is enabled
+    if (!settings.inlineTasks.enableInlineToggle) {
+      logger.info('Inline toggle handler disabled in settings');
+      return;
+    }
+
+    // Create TaskCommands for toggle handler
+    const taskCommands = new TaskCommands(
+      this.repository,
+      this.scheduler.getRecurrenceEngine(),
+      () => this.settingsService.get(),
+      undefined
+    );
+
+    // Initialize handler
+    this.inlineToggleHandler = new InlineToggleHandler({
+      taskIndex: this.taskManager.getTaskIndex(),
+      taskCommands: taskCommands,
+    });
+
+    // Listen for checkbox click events
+    this.checkboxClickListener = async (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      
+      // Check if click is on a checkbox
+      if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'checkbox') {
+        const blockElement = target.closest('[data-node-id]') as HTMLElement;
+        if (!blockElement) return;
+        
+        const blockId = blockElement.getAttribute('data-node-id');
+        if (!blockId) return;
+        
+        const newChecked = (target as HTMLInputElement).checked;
+        
+        // Handle async to avoid blocking UI
+        this.inlineToggleHandler!.handleToggle(blockId, newChecked).catch(err => {
+          logger.error('Failed to handle inline toggle', err);
+          if (settings.inlineTasks.showToggleNotifications) {
+            toast.error('Failed to update task');
+          }
+        });
+      }
+    };
+
+    // Use capture phase to catch events before they bubble
+    document.addEventListener('click', this.checkboxClickListener, true);
+    
+    logger.info('Inline toggle handler setup complete');
   }
 
   private handleCreateTaskEvent = (event: Event) => {

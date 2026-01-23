@@ -182,6 +182,11 @@ export interface InlineTaskSettings {
   /** UI */
   showInlineHints: boolean;
   highlightManagedTasks: boolean;
+  
+  /** Phase 4: Inline checkbox toggle handling */
+  enableInlineToggle: boolean;
+  updateBlockOnToggle: boolean;
+  showToggleNotifications: boolean;
 }
 
 /**
@@ -256,6 +261,9 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     strictParsing: false,
     showInlineHints: true,
     highlightManagedTasks: true,
+    enableInlineToggle: true,
+    updateBlockOnToggle: true,
+    showToggleNotifications: false,
   },
 };
 
