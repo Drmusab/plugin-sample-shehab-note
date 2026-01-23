@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RecurrenceEngine } from "../core/engine/RecurrenceEngine";
+import { RecurrenceEngineRRULE as RecurrenceEngine } from "../core/engine/recurrence/RecurrenceEngineRRULE";
 
 describe("RecurrenceEngine", () => {
   it("calculates next daily occurrence", () => {

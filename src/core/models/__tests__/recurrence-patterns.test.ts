@@ -8,7 +8,7 @@ import {
   createLastDayOfMonthPattern,
   parseRecurrencePattern
 } from '@/core/models/RecurrencePatterns';
-import { RecurrenceEngine } from '@/core/engine/RecurrenceEngine';
+import { RecurrenceEngineRRULE as RecurrenceEngine } from '@/core/engine/recurrence/RecurrenceEngineRRULE';
 
 describe('RecurrencePatterns', () => {
   const engine = new RecurrenceEngine();

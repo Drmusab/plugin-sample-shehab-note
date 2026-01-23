@@ -1,6 +1,6 @@
 import type { Task } from "@/core/models/Task";
 import type { TaskStorage } from "@/core/storage/TaskStorage";
-import { RecurrenceEngine } from "./RecurrenceEngine";
+import { RecurrenceEngineRRULE as RecurrenceEngine } from "./recurrence/RecurrenceEngineRRULE";
 import { TimezoneHandler } from "./TimezoneHandler";
 import { OnCompletionHandler } from "./OnCompletion";
 import type { SchedulerEventListener, SchedulerEventType, TaskDueEvent } from "./SchedulerEvents";

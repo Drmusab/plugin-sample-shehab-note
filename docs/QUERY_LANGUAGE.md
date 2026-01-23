@@ -348,6 +348,107 @@ due between tomorrow and in 2 days
 priority above medium
 ```
 
+## Dependency Filters (NEW)
+
+Tasks can have dependencies on other tasks. Use these filters to find tasks based on their dependency status.
+
+### Is Blocking
+Find tasks that are blocking other tasks (other tasks depend on these):
+```
+is blocking
+```
+
+Find tasks that are not blocking any other tasks:
+```
+is not blocking
+```
+
+### Is Blocked
+Find tasks that are blocked by dependencies (waiting on other tasks):
+```
+is blocked
+```
+
+Find tasks that are not blocked (ready to work on):
+```
+is not blocked
+```
+
+### Dependency Examples
+```
+# Find all tasks ready to work on (not blocked)
+is not blocked
+status is todo
+
+# Find high-priority tasks that are blocking others
+is blocking
+priority above normal
+
+# Find overdue tasks that are blocking others
+is blocking
+due before today
+status is todo
+```
+
+## Query Placeholders (NEW)
+
+Placeholders allow you to create dynamic queries that reference the current file context. This is especially useful for queries embedded in note files.
+
+### Available Placeholders
+
+| Placeholder | Description | Example Value |
+|------------|-------------|---------------|
+| `{{query.file.path}}` | Full path to current file | `projects/work/meeting-notes.md` |
+| `{{query.file.folder}}` | Parent folder of current file | `projects/work` |
+| `{{query.file.name}}` | Current file name | `meeting-notes.md` |
+| `{{query.file.root}}` | Top-level folder | `projects` |
+
+### Placeholder Examples
+
+**Show all tasks in current folder:**
+```
+path includes {{query.file.folder}}
+status is todo
+sort by due
+```
+
+**Show tasks from same project (root folder) excluding current file:**
+```
+path includes {{query.file.root}}
+path does not include {{query.file.name}}
+is not blocked
+sort by urgency
+```
+
+**Daily note - show tasks scheduled for same folder:**
+```
+path includes {{query.file.folder}}
+has scheduled date
+scheduled before tomorrow
+sort by priority
+```
+
+**Project dashboard - show all project tasks:**
+```
+path includes {{query.file.root}}/{{query.file.folder}}
+status is todo
+group by priority
+```
+
+### How Placeholders Work
+
+1. Placeholders are resolved **before** the query is parsed
+2. The file context comes from where the query is embedded/executed
+3. If no context is available, placeholders resolve to empty strings
+4. Multiple placeholders can be used in the same query
+
+### Placeholder Use Cases
+
+- **Project-specific queries**: Show tasks only from the current project
+- **Folder-based filtering**: Organize tasks by folder structure
+- **Context-aware dashboards**: Embedded queries that adapt to their location
+- **Template queries**: Reusable query templates for different folders
+
 ## Tips and Best practices
 
 1. **Use multiple lines**: Each filter, sort, group, or limit instruction should be on its own line.

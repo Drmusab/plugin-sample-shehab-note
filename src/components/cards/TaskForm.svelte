@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Task, TaskPriority } from "@/core/models/Task";
   import type { Frequency, FrequencyType } from "@/core/models/Frequency";
-  import { RecurrenceEngine } from "@/core/engine/RecurrenceEngine";
+  import { RecurrenceEngineRRULE as RecurrenceEngine } from "@/core/engine/recurrence/RecurrenceEngineRRULE";
   import { createTask } from "@/core/models/Task";
   import { WEEKDAY_NAMES } from "@/utils/constants";
   import { formatDateTime } from "@/utils/date";

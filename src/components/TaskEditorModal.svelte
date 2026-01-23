@@ -203,7 +203,7 @@
     <div class="task-editor__body">
       <!-- Task Name -->
       <div class="task-editor__field">
-        <label for="task-name">Description *</label>
+        <label for="task-name"><u>T</u>ask Description *</label>
         <input
           id="task-name"
           bind:this={nameInput}
@@ -211,6 +211,7 @@
           bind:value={name}
           placeholder="Task name"
           aria-invalid={!!nameError}
+          accesskey="t"
           oninput={() => (touched.name = true)}
           onblur={() => (touched.name = true)}
         />
@@ -221,35 +222,37 @@
 
       <!-- Notes/Description -->
       <div class="task-editor__field">
-        <label for="task-description">Notes</label>
+        <label for="task-description"><u>N</u>otes</label>
         <textarea
           id="task-description"
           bind:value={description}
           placeholder="Additional details about this task..."
           rows="3"
+          accesskey="n"
         ></textarea>
       </div>
 
       <!-- Priority -->
       <div class="task-editor__field">
-        <label>Priority</label>
+        <label><u>P</u>riority</label>
         <PrioritySelector value={priority} onchange={handlePriorityChange} />
       </div>
 
       <!-- Status -->
       <div class="task-editor__field">
-        <label>Status</label>
+        <label>Stat<u>u</u>s</label>
         <StatusSelector value={status} onchange={handleStatusChange} />
       </div>
 
       <!-- Due Date -->
       <div class="task-editor__field">
-        <label for="task-due">Due Date *</label>
+        <label for="task-due"><u>D</u>ue Date *</label>
         <input
           id="task-due"
           type="datetime-local"
           bind:value={dueAt}
           aria-invalid={!!dueAtError}
+          accesskey="d"
           oninput={() => (touched.dueAt = true)}
           onblur={() => (touched.dueAt = true)}
         />
@@ -260,29 +263,31 @@
 
       <!-- Scheduled Date -->
       <div class="task-editor__field">
-        <label for="task-scheduled">Scheduled Date</label>
+        <label for="task-scheduled"><u>S</u>cheduled Date</label>
         <input
           id="task-scheduled"
           type="datetime-local"
           bind:value={scheduledAt}
+          accesskey="s"
         />
         <div class="task-editor__hint">When you plan to start working on this task</div>
       </div>
 
       <!-- Start Date -->
       <div class="task-editor__field">
-        <label for="task-start">Start Date</label>
+        <label for="task-start">St<u>a</u>rt Date</label>
         <input
           id="task-start"
           type="datetime-local"
           bind:value={startAt}
+          accesskey="a"
         />
         <div class="task-editor__hint">Earliest date this task can begin</div>
       </div>
 
       <!-- Recurrence -->
       <div class="task-editor__field">
-        <label for="task-recurrence">Recurrence</label>
+        <label for="task-recurrence"><u>R</u>ecurrence</label>
         <RecurrenceInput
           value={recurrenceText}
           onchange={handleRecurrenceChange}

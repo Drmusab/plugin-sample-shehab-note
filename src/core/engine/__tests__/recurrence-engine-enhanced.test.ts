@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { RecurrenceEngine } from '../RecurrenceEngine';
+import { RecurrenceEngineRRULE as RecurrenceEngine } from '../recurrence/RecurrenceEngineRRULE';
 import type { Frequency } from '@/core/models/Frequency';
 
 describe('RecurrenceEngine - Enhanced Features', () => {

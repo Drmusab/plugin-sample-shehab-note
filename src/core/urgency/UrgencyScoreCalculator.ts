@@ -12,9 +12,16 @@ export interface UrgencyScoreOptions {
 export interface UrgencyCalculation {
   score: number;
   breakdown: {
+    /** Contribution from task priority (weighted by 3) */
     priorityContribution: number;
+    /** Contribution from due date proximity (weighted by 2) */
     dueDateContribution: number;
+    /** Contribution from being overdue (weighted by 5) */
     overdueContribution: number;
+    /** Contribution from scheduled date (weighted by 1.5, max 7.5 points) */
+    scheduledContribution: number;
+    /** Contribution from start date (5 points when task can start) */
+    startContribution: number;
   };
 }
 
@@ -38,20 +45,28 @@ const getPriorityMultiplier = (
 /**
  * Calculate task urgency score.
  *
- * Formula:
- *   urgencyScore = (baseDueScore + overduePenalty) × priorityMultiplier
+ * Formula (Obsidian Tasks compatible):
+ *   urgencyScore = (priorityScore × 3) + (dueScore × 2) + (scheduledScore × 1.5) + startScore + (overdueScore × 5)
  *
- * baseDueScore:
+ * Priority scoring:
+ *   - Multiplied by settings-provided multipliers per priority level
+ *
+ * Due date scoring:
  *   - No due date: noDueDateScore
  *   - Due today or sooner: dueSoonScoreMax
  *   - Otherwise: clamp(dueSoonScoreMax - daysUntilDue × dueDateWeight, dueSoonScoreMin, dueSoonScoreMax)
  *
- * overduePenalty:
+ * Scheduled date scoring:
+ *   - Scheduled today or past: 7.5 points
+ *   - Within next 7 days: (7 - daysUntilScheduled) × 1.5
+ *
+ * Start date scoring:
+ *   - Can start now (start date is today or past): 5 points
+ *   - Otherwise: 0 points
+ *
+ * Overdue penalty:
  *   - 0 when not overdue
  *   - overdueBaseScore + (daysOverdue × overduePenaltyWeight) when overdue
- *
- * priorityMultiplier:
- *   - Settings-provided multipliers per priority level
  */
 export function calculateUrgencyScore(task: Task, options: UrgencyScoreOptions = {}): number {
   const calculation = calculateUrgencyWithBreakdown(task, options);
@@ -71,7 +86,9 @@ export function calculateUrgencyWithBreakdown(task: Task, options: UrgencyScoreO
       breakdown: {
         priorityContribution: 0,
         dueDateContribution: 0,
-        overdueContribution: 0
+        overdueContribution: 0,
+        scheduledContribution: 0,
+        startContribution: 0
       }
     };
   }
@@ -79,60 +96,81 @@ export function calculateUrgencyWithBreakdown(task: Task, options: UrgencyScoreO
   const normalizedPriority = normalizePriority(task.priority) ?? "normal";
   const priorityMultiplier = getPriorityMultiplier(normalizedPriority, settings);
 
-  if (!task.dueAt) {
-    const baseScore = settings.noDueDateScore;
-    const totalScore = baseScore * priorityMultiplier;
-    return {
-      score: applyUrgencyCaps(totalScore, settings),
-      breakdown: {
-        priorityContribution: totalScore - baseScore,  // Difference from base
-        dueDateContribution: baseScore,
-        overdueContribution: 0
+  // Calculate priority contribution (weighted by 3)
+  const priorityBase = 5; // Base score for priority
+  const priorityContribution = priorityBase * priorityMultiplier * 3;
+  
+  // Calculate due date contribution
+  let dueDateContribution = 0;
+  let overdueContribution = 0;
+  
+  if (task.dueAt) {
+    const dueDate = new Date(task.dueAt);
+    if (!Number.isNaN(dueDate.getTime())) {
+      const isOverdue = dueDate.getTime() < now.getTime();
+      const daysUntilDue = getDayDelta(now, dueDate);
+      const daysOverdue = isOverdue
+        ? Math.max(1, Math.ceil((now.getTime() - dueDate.getTime()) / MS_PER_DAY))
+        : 0;
+
+      if (isOverdue) {
+        overdueContribution = (settings.overdueBaseScore + daysOverdue * settings.overduePenaltyWeight) * 5;
+      } else {
+        const baseDueScore = clamp(
+          settings.dueSoonScoreMax - daysUntilDue * settings.dueDateWeight,
+          settings.dueSoonScoreMin,
+          settings.dueSoonScoreMax
+        );
+        dueDateContribution = baseDueScore * 2;
       }
-    };
+    }
+  } else {
+    // No due date: use a minimal base score
+    dueDateContribution = settings.noDueDateScore;
   }
-
-  const dueDate = new Date(task.dueAt);
-  if (Number.isNaN(dueDate.getTime())) {
-    const baseScore = settings.noDueDateScore;
-    const totalScore = baseScore * priorityMultiplier;
-    return {
-      score: applyUrgencyCaps(totalScore, settings),
-      breakdown: {
-        priorityContribution: totalScore - baseScore,  // Difference from base
-        dueDateContribution: baseScore,
-        overdueContribution: 0
+  
+  // Calculate scheduled date contribution (weighted by 1.5)
+  let scheduledContribution = 0;
+  if (task.scheduledAt) {
+    const scheduledDate = new Date(task.scheduledAt);
+    if (!Number.isNaN(scheduledDate.getTime())) {
+      const daysUntilScheduled = getDayDelta(now, scheduledDate);
+      
+      if (daysUntilScheduled <= 0) {
+        // Scheduled today or in the past
+        scheduledContribution = 7.5;
+      } else if (daysUntilScheduled <= 7) {
+        // Scheduled within next week
+        scheduledContribution = (7 - daysUntilScheduled) * 1.5;
       }
-    };
+    }
   }
-
-  const isOverdue = dueDate.getTime() < now.getTime();
-  const daysUntilDue = getDayDelta(now, dueDate);
-  const daysOverdue = isOverdue
-    ? Math.max(1, Math.ceil((now.getTime() - dueDate.getTime()) / MS_PER_DAY))
-    : 0;
-
-  const baseDueScore = isOverdue
-    ? 0
-    : clamp(
-        settings.dueSoonScoreMax - daysUntilDue * settings.dueDateWeight,
-        settings.dueSoonScoreMin,
-        settings.dueSoonScoreMax
-      );
-
-  const overduePenalty = isOverdue
-    ? settings.overdueBaseScore + daysOverdue * settings.overduePenaltyWeight
-    : 0;
-
-  const baseScore = baseDueScore + overduePenalty;
-  const totalScore = baseScore * priorityMultiplier;
+  
+  // Calculate start date contribution
+  let startContribution = 0;
+  if (task.startAt) {
+    const startDate = new Date(task.startAt);
+    if (!Number.isNaN(startDate.getTime())) {
+      const daysUntilStart = getDayDelta(now, startDate);
+      
+      if (daysUntilStart <= 0) {
+        // Can start now
+        startContribution = 5;
+      }
+    }
+  }
+  
+  // Total score
+  const totalScore = priorityContribution + dueDateContribution + overdueContribution + scheduledContribution + startContribution;
   
   return {
     score: applyUrgencyCaps(totalScore, settings),
     breakdown: {
-      priorityContribution: totalScore - baseScore,  // Difference from base
-      dueDateContribution: baseDueScore,
-      overdueContribution: overduePenalty
+      priorityContribution,
+      dueDateContribution,
+      overdueContribution,
+      scheduledContribution,
+      startContribution
     }
   };
 }

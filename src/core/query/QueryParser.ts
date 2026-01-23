@@ -4,6 +4,7 @@ import type { DateField, DateComparator } from './filters/DateFilter';
 import type { PriorityLevel } from './filters/PriorityFilter';
 import { DateParser } from '@/core/parsers/DateParser';
 import { RegexMatcher, type RegexSpec } from './utils/RegexMatcher';
+import { placeholderResolver, type QueryContext } from '@/utils/PlaceholderResolver';
 
 /**
  * Parse query string to Abstract Syntax Tree (AST)
@@ -50,9 +51,15 @@ export class QueryParser {
    * Parse query string to AST
    * @param queryString The query string to parse
    * @param referenceDate Reference date for relative date parsing (defaults to now)
+   * @param context Query context for placeholder resolution (optional)
    * @throws QuerySyntaxError with helpful error message
    */
-  parse(queryString: string, referenceDate: Date = new Date()): QueryAST {
+  parse(queryString: string, referenceDate: Date = new Date(), context?: QueryContext): QueryAST {
+    // Resolve placeholders first if context is provided
+    if (context && placeholderResolver.hasPlaceholders(queryString)) {
+      queryString = placeholderResolver.resolve(queryString, context);
+    }
+    
     // Extract directives first
     let text = queryString.trim();
     const directives: { overrideGlobalFilter?: boolean; useProfile?: string } = {};
@@ -305,6 +312,9 @@ export class QueryParser {
     }
     if (line === 'is blocking') {
       return { type: 'dependency', operator: 'is-blocking', value: true };
+    }
+    if (line === 'is not blocking') {
+      return { type: 'dependency', operator: 'is-blocking', value: false };
     }
 
     // Recurrence filters
