@@ -374,6 +374,23 @@ export class RecurrenceEngineRRULE {
   }
 
   /**
+   * Create a temporary task object for legacy API compatibility
+   * @private
+   */
+  private createLegacyTask(frequency: Frequency, dueAt: Date, options?: { whenDone?: boolean; timezone?: string }): Task {
+    return {
+      id: `legacy-${Date.now()}`,
+      name: `legacy-frequency-${frequency.type}`,
+      frequency,
+      dueAt: dueAt.toISOString(),
+      createdAt: dueAt.toISOString(),
+      enabled: true,
+      whenDone: options?.whenDone ?? frequency.whenDone ?? false,
+      timezone: options?.timezone || frequency.timezone || undefined,
+    } as Task;
+  }
+
+  /**
    * Legacy API: Calculate the next occurrence date based on frequency
    * @deprecated Use getNextOccurrence with a Task object instead
    * @param currentDue Current due date
@@ -394,16 +411,7 @@ export class RecurrenceEngineRRULE {
     }
 
     // Create a minimal task object for the new API
-    const tempTask: Task = {
-      id: 'temp',
-      name: 'temp',
-      frequency: freq,
-      dueAt: currentDue.toISOString(),
-      createdAt: currentDue.toISOString(),
-      enabled: true,
-      whenDone: options?.whenDone ?? frequency.whenDone ?? false,
-      timezone: options?.timezone || frequency.timezone || undefined,
-    } as Task;
+    const tempTask = this.createLegacyTask(freq, currentDue, options);
 
     // Determine the reference date
     const whenDone = options?.whenDone ?? frequency.whenDone ?? false;
@@ -444,14 +452,7 @@ export class RecurrenceEngineRRULE {
     }
 
     // Create a minimal task object for the new API
-    const tempTask: Task = {
-      id: 'temp',
-      name: 'temp',
-      frequency: freq,
-      dueAt: firstOccurrence.toISOString(),
-      createdAt: firstOccurrence.toISOString(),
-      enabled: true,
-    } as Task;
+    const tempTask = this.createLegacyTask(freq, firstOccurrence);
 
     return this.getOccurrencesBetween(tempTask, startDate, endDate);
   }
@@ -479,14 +480,7 @@ export class RecurrenceEngineRRULE {
     }
 
     // Create a minimal task object for the new API
-    const tempTask: Task = {
-      id: 'temp',
-      name: 'temp',
-      frequency: freq,
-      dueAt: firstOccurrence.toISOString(),
-      createdAt: firstOccurrence.toISOString(),
-      enabled: true,
-    } as Task;
+    const tempTask = this.createLegacyTask(freq, firstOccurrence);
 
     // Get all occurrences between lastCheckedAt and now
     return this.getOccurrencesBetween(tempTask, lastCheckedAt, now);
