@@ -8,7 +8,7 @@
  */
 
 import { parseNaturalLanguageDate } from '@/utils/DateParser';
-import { parseRecurrenceRule } from '@/utils/RecurrenceParser';
+import { parseRecurrenceRule, rruleToText } from '@/utils/RecurrenceParser';
 
 /**
  * Task status enum
@@ -82,7 +82,7 @@ export interface ValidationResult {
 }
 
 // Regex patterns for parsing
-const STATUS_REGEX = /^-?\s*-\s*\[\s*([ x\-])\s*\]/i;
+const STATUS_REGEX = /^-\s*\[\s*([ x\-])\s*\]/i;
 const DUE_DATE_REGEX = /📅\s+([^🔁🔼🔺🔽🆔⛔⏳🛫#]+?)(?=\s*(?:🔁|🔼|🔺|🔽|🆔|⛔|⏳|🛫|#|$))/;
 const SCHEDULED_DATE_REGEX = /⏳\s+([^🔁🔼🔺🔽🆔⛔📅🛫#]+?)(?=\s*(?:🔁|🔼|🔺|🔽|🆔|⛔|📅|🛫|#|$))/;
 const START_DATE_REGEX = /🛫\s+([^🔁🔼🔺🔽🆔⛔📅⏳#]+?)(?=\s*(?:🔁|🔼|🔺|🔽|🆔|⛔|📅|⏳|#|$))/;
@@ -239,9 +239,9 @@ export function parseInlineTask(text: string): ParseResult {
 
   // Extract tags
   const tags: string[] = [];
-  let tagMatch;
-  while ((tagMatch = TAG_REGEX.exec(remaining)) !== null) {
-    tags.push(tagMatch[1]);
+  const tagMatches = remaining.matchAll(TAG_REGEX);
+  for (const match of tagMatches) {
+    tags.push(match[1]);
   }
   if (tags.length > 0) {
     task.tags = tags;
@@ -294,9 +294,10 @@ export function normalizeTask(task: ParsedTask): string {
 
   // Recurrence
   if (task.recurrence) {
+    // Convert RRULE back to human-readable text for lossless round-trip
+    const humanText = rruleToText(task.recurrence.rule);
     const modeText = task.recurrence.mode === 'done' ? ' when done' : '';
-    // Convert RRULE back to human text would be ideal, but for now use simple pattern
-    parts.push(`🔁 ${task.recurrence.rule}${modeText}`);
+    parts.push(`🔁 ${humanText}${modeText}`);
   }
 
   // Priority
