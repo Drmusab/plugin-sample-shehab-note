@@ -96,13 +96,14 @@ describe('QueryParser - Operator Aliases', () => {
       const parser = new QueryParser();
       const ast = parser.parse('priority is high except done');
       
+      // "except" expands to "AND NOT", so this becomes: priority is high AND NOT done
+      // "NOT done" is optimized to {type: 'done', value: false}
       expect(ast.filters).toHaveLength(1);
       expect(ast.filters[0].type).toBe('boolean');
       expect(ast.filters[0].operator).toBe('AND');
       expect(ast.filters[0].left?.type).toBe('priority');
-      expect(ast.filters[0].right?.type).toBe('boolean');
-      expect(ast.filters[0].right?.operator).toBe('NOT');
-      expect(ast.filters[0].right?.inner?.type).toBe('done');
+      expect(ast.filters[0].right?.type).toBe('done');
+      expect(ast.filters[0].right?.value).toBe(false);
     });
 
     it('should parse tag includes #urgent except tag includes #personal', () => {
@@ -123,21 +124,22 @@ describe('QueryParser - Operator Aliases', () => {
       const parser = new QueryParser();
       const ast = parser.parse('priority is high && !done || priority is urgent');
       
-      // Current implementation: AND is checked first, so becomes (priority AND !done) OR urgent
-      // But since we split on AND first in parseAndFilter, the top-level is AND
+      // With proper precedence: AND has higher precedence than OR
+      // So this parses as: (priority is high AND NOT done) OR priority is urgent
       expect(ast.filters).toHaveLength(1);
       expect(ast.filters[0].type).toBe('boolean');
-      expect(ast.filters[0].operator).toBe('AND');
+      expect(ast.filters[0].operator).toBe('OR');
     });
 
     it('should parse -done && priority is high || tag includes #urgent', () => {
       const parser = new QueryParser();
       const ast = parser.parse('-done && priority is high || tag includes #urgent');
       
-      // Current implementation: AND is checked first
+      // With proper precedence: AND has higher precedence than OR
+      // So this parses as: (NOT done AND priority is high) OR tag includes #urgent
       expect(ast.filters).toHaveLength(1);
       expect(ast.filters[0].type).toBe('boolean');
-      expect(ast.filters[0].operator).toBe('AND');
+      expect(ast.filters[0].operator).toBe('OR');
     });
 
     it('should parse priority is high except done && tag includes #work', () => {

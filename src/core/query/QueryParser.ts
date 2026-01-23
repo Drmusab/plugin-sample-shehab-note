@@ -165,12 +165,17 @@ export class QueryParser {
     // Normalize operator aliases first
     line = this.normalizeOperatorAliases(line);
     
-    // Handle simple keywords first (before checking for boolean operators)
+    // Handle special simple keywords before boolean parsing
     if (line === 'done') {
       return { type: 'done', operator: 'is', value: true };
     }
     if (line === 'not done') {
       return { type: 'done', operator: 'is', value: false };
+    }
+    
+    // Use precedence-aware parser for expressions with boolean operators or parentheses
+    if (this.hasBooleanOperators(line) || line.includes('(')) {
+      return this.parseBooleanExpression(line);
     }
     
     // Check for "between" date filters first (before boolean operators)
@@ -181,18 +186,6 @@ export class QueryParser {
       if (dateFilter) {
         return dateFilter;
       }
-    }
-    
-    // Check for boolean operators (after simple keywords and between)
-    // Use regex for more robust case-insensitive matching
-    if (/\s+(and|AND)\s+/i.test(line)) {
-      return this.parseAndFilter(line);
-    }
-    if (/\s+(or|OR)\s+/i.test(line)) {
-      return this.parseOrFilter(line);
-    }
-    if (/^(not|NOT)\s+/i.test(line)) {
-      return this.parseNotFilter(line);
     }
 
     // Status filters
@@ -499,102 +492,354 @@ export class QueryParser {
     }
     return str;
   }
-
-  private parseAndFilter(line: string): FilterNode {
-    // Split by case-insensitive AND
-    const parts = line.split(/\s+(and|AND)\s+/i).filter((_, i) => i % 2 === 0); // Remove the captured "and" parts
-    const filters = parts.map(p => this.parseFilterInstruction(p.trim())).filter(f => f !== null) as FilterNode[];
-    
-    if (filters.length === 0) {
-      throw new QuerySyntaxError(
-        'Empty AND expression',
-        this.line,
-        this.column,
-        'AND must have filters on both sides'
-      );
+  
+  /**
+   * Check if line contains boolean operators (AND, OR, NOT)
+   * Excludes 'between X and Y' pattern
+   */
+  private hasBooleanOperators(line: string): boolean {
+    // Check for NOT at the beginning
+    if (/^(not|NOT)\s+/i.test(line)) {
+      return true;
     }
     
-    if (filters.length === 1) {
-      return filters[0];
+    // Check for AND or OR
+    // But exclude "between ... and ..." pattern
+    const betweenPattern = /\s+between\s+.+?\s+and\s+/i;
+    if (betweenPattern.test(line)) {
+      // Has "between...and" - remove it and check the rest
+      const withoutBetween = line.replace(betweenPattern, ' ');
+      return /\s+(and|AND|or|OR)\s+/i.test(withoutBetween);
     }
     
-    // Build left-associative tree: (a AND b) AND c
-    let result = filters[0];
-    for (let i = 1; i < filters.length; i++) {
-      result = {
-        type: 'boolean',
-        operator: 'AND',
-        value: null,
-        left: result,
-        right: filters[i],
-      };
-    }
-    
-    return result;
+    return /\s+(and|AND|or|OR)\s+/i.test(line);
   }
 
-  private parseOrFilter(line: string): FilterNode {
-    // Split by case-insensitive OR
-    const parts = line.split(/\s+(or|OR)\s+/i).filter((_, i) => i % 2 === 0); // Remove the captured "or" parts
-    const filters = parts.map(p => this.parseFilterInstruction(p.trim())).filter(f => f !== null) as FilterNode[];
+  /**
+   * Parse boolean expression with proper operator precedence
+   * Precedence (highest to lowest): NOT, AND, OR
+   * Supports parentheses for explicit grouping
+   */
+  private parseBooleanExpression(line: string): FilterNode {
+    return this.parseOrExpression(line);
+  }
+
+  /**
+   * Parse OR expression (lowest precedence)
+   * Format: AND_EXPR (OR AND_EXPR)*
+   */
+  private parseOrExpression(line: string): FilterNode {
+    // Split by OR that's not inside parentheses
+    const parts = this.splitByOperator(line, /\s+(or|OR)\s+/i);
     
-    if (filters.length === 0) {
-      throw new QuerySyntaxError(
-        'Empty OR expression',
-        this.line,
-        this.column,
-        'OR must have filters on both sides'
-      );
-    }
-    
-    if (filters.length === 1) {
-      return filters[0];
+    if (parts.length === 1) {
+      return this.parseAndExpression(parts[0]);
     }
     
     // Build left-associative tree: (a OR b) OR c
-    let result = filters[0];
-    for (let i = 1; i < filters.length; i++) {
+    let result = this.parseAndExpression(parts[0]);
+    for (let i = 1; i < parts.length; i++) {
       result = {
         type: 'boolean',
         operator: 'OR',
         value: null,
         left: result,
-        right: filters[i],
+        right: this.parseAndExpression(parts[i]),
       };
     }
     
     return result;
   }
 
-  private parseNotFilter(line: string): FilterNode {
-    // Remove NOT or not prefix
-    const cleanLine = line.replace(/^NOT\s+/i, '').trim();
+  /**
+   * Parse AND expression (middle precedence)
+   * Format: NOT_EXPR (AND NOT_EXPR)*
+   */
+  private parseAndExpression(line: string): FilterNode {
+    // Split by AND that's not inside parentheses or "between...and"
+    const parts = this.splitByOperator(line, /\s+(and|AND)\s+/i, true);
     
-    if (!cleanLine) {
-      throw new QuerySyntaxError(
-        'Empty NOT expression',
-        this.line,
-        this.column,
-        'NOT must have a filter after it'
-      );
+    if (parts.length === 1) {
+      return this.parseNotExpression(parts[0]);
     }
     
-    const inner = this.parseFilterInstruction(cleanLine);
-    
-    if (!inner) {
-      throw new QuerySyntaxError(
-        'Invalid filter after NOT',
-        this.line,
-        this.column,
-        'NOT must be followed by a valid filter'
-      );
+    // Build left-associative tree: (a AND b) AND c
+    let result = this.parseNotExpression(parts[0]);
+    for (let i = 1; i < parts.length; i++) {
+      result = {
+        type: 'boolean',
+        operator: 'AND',
+        value: null,
+        left: result,
+        right: this.parseNotExpression(parts[i]),
+      };
     }
     
-    return {
-      type: 'boolean',
-      operator: 'NOT',
-      value: null,
-      inner,
-    };
+    return result;
   }
+
+  /**
+   * Parse NOT expression (highest precedence)
+   * Format: NOT PRIMARY | PRIMARY
+   */
+  private parseNotExpression(line: string): FilterNode {
+    const trimmed = line.trim();
+    
+    // Special case: "not done" should be parsed as {type: 'done', value: false}
+    // Check this before general NOT parsing
+    if (trimmed.toLowerCase() === 'not done') {
+      return { type: 'done', operator: 'is', value: false };
+    }
+    
+    // Check for NOT prefix
+    if (/^(not|NOT)\s+/i.test(trimmed)) {
+      const cleanLine = trimmed.replace(/^(not|NOT)\s+/i, '').trim();
+      const inner = this.parsePrimaryExpression(cleanLine);
+      
+      return {
+        type: 'boolean',
+        operator: 'NOT',
+        value: null,
+        inner,
+      };
+    }
+    
+    return this.parsePrimaryExpression(trimmed);
+  }
+
+  /**
+   * Parse primary expression (parentheses or atomic filter)
+   * Format: (BOOLEAN_EXPR) | ATOMIC_FILTER
+   */
+  private parsePrimaryExpression(line: string): FilterNode {
+    const trimmed = line.trim();
+    
+    // Check for parentheses
+    if (trimmed.startsWith('(') && trimmed.endsWith(')')) {
+      // Remove outer parentheses and parse inner expression
+      const inner = trimmed.slice(1, -1).trim();
+      return this.parseBooleanExpression(inner);
+    }
+    
+    // Parse as atomic filter
+    return this.parseAtomicFilter(trimmed);
+  }
+
+  /**
+   * Split line by operator, respecting parentheses and "between...and"
+   */
+  private splitByOperator(line: string, operatorRegex: RegExp, excludeBetween: boolean = false): string[] {
+    const parts: string[] = [];
+    let currentPart = '';
+    let parenDepth = 0;
+    let i = 0;
+    
+    while (i < line.length) {
+      const char = line[i];
+      
+      if (char === '(') {
+        parenDepth++;
+        currentPart += char;
+        i++;
+      } else if (char === ')') {
+        parenDepth--;
+        currentPart += char;
+        i++;
+      } else if (parenDepth === 0) {
+        // Check if we're at an operator
+        const remaining = line.slice(i);
+        const match = remaining.match(operatorRegex);
+        
+        if (match && match.index === 0) {
+          // Special handling for AND in "between...and"
+          if (excludeBetween && /\s+(and|AND)\s+/i.test(match[0])) {
+            // Check if this is part of "between...and"
+            const beforeContext = currentPart.toLowerCase();
+            if (beforeContext.match(/\s+between\s+[^)]*$/)) {
+              // This AND is part of "between...and", don't split
+              currentPart += match[0];
+              i += match[0].length;
+              continue;
+            }
+          }
+          
+          // Found operator at top level - split here
+          if (currentPart.trim()) {
+            parts.push(currentPart.trim());
+          }
+          currentPart = '';
+          i += match[0].length;
+        } else {
+          currentPart += char;
+          i++;
+        }
+      } else {
+        currentPart += char;
+        i++;
+      }
+    }
+    
+    if (currentPart.trim()) {
+      parts.push(currentPart.trim());
+    }
+    
+    return parts.length > 0 ? parts : [line];
+  }
+
+  /**
+   * Parse atomic filter (non-boolean filter)
+   */
+  private parseAtomicFilter(line: string): FilterNode {
+    // Normalize aliases again for the atomic filter part
+    // (they may have been introduced by splitting)
+    const trimmed = this.normalizeOperatorAliases(line.trim());
+    
+    // Handle simple keywords
+    if (trimmed === 'done') {
+      return { type: 'done', operator: 'is', value: true };
+    }
+    if (trimmed === 'not done') {
+      return { type: 'done', operator: 'is', value: false };
+    }
+    
+    // Check for "between" date filters
+    const betweenMatch = trimmed.match(/^(due|scheduled|start|created|done|cancelled)\s+between\s+/i);
+    if (betweenMatch) {
+      const dateFilter = this.parseDateFilter(trimmed);
+      if (dateFilter) {
+        return dateFilter;
+      }
+    }
+
+    // Status filters
+    if (trimmed.startsWith('status.type is ')) {
+      const typeStr = trimmed.substring('status.type is '.length).trim();
+      const statusType = this.parseStatusType(typeStr);
+      return { type: 'status', operator: 'type-is', value: statusType };
+    }
+    if (trimmed.startsWith('status.name includes ')) {
+      const name = trimmed.substring('status.name includes '.length).trim();
+      return { type: 'status', operator: 'name-includes', value: this.unquote(name) };
+    }
+    if (trimmed.startsWith('status.symbol is ')) {
+      const symbol = trimmed.substring('status.symbol is '.length).trim();
+      return { type: 'status', operator: 'symbol-is', value: this.unquote(symbol) };
+    }
+
+    // Date filters
+    const dateFilterMatch = this.parseDateFilter(trimmed);
+    if (dateFilterMatch) {
+      return dateFilterMatch;
+    }
+
+    // Priority filters
+    if (trimmed.startsWith('priority is ')) {
+      const level = trimmed.substring('priority is '.length).trim();
+      return { type: 'priority', operator: 'is', value: level as PriorityLevel };
+    }
+    if (trimmed.startsWith('priority above ')) {
+      const level = trimmed.substring('priority above '.length).trim();
+      return { type: 'priority', operator: 'above', value: level as PriorityLevel };
+    }
+    if (trimmed.startsWith('priority below ')) {
+      const level = trimmed.substring('priority below '.length).trim();
+      return { type: 'priority', operator: 'below', value: level as PriorityLevel };
+    }
+
+    // Urgency filters
+    if (trimmed.startsWith('urgency is ')) {
+      const value = trimmed.substring('urgency is '.length).trim();
+      return { type: 'urgency', operator: 'is', value: this.parseNumericValue(value, 'urgency') };
+    }
+    if (trimmed.startsWith('urgency above ')) {
+      const value = trimmed.substring('urgency above '.length).trim();
+      return { type: 'urgency', operator: 'above', value: this.parseNumericValue(value, 'urgency') };
+    }
+    if (trimmed.startsWith('urgency below ')) {
+      const value = trimmed.substring('urgency below '.length).trim();
+      return { type: 'urgency', operator: 'below', value: this.parseNumericValue(value, 'urgency') };
+    }
+
+    // Tag filters
+    if (trimmed.startsWith('tag includes ')) {
+      const tag = trimmed.substring('tag includes '.length).trim();
+      return { type: 'tag', operator: 'includes', value: this.unquote(tag) };
+    }
+    if (trimmed.startsWith('tag does not include ')) {
+      const tag = trimmed.substring('tag does not include '.length).trim();
+      return { type: 'tag', operator: 'includes', value: this.unquote(tag), negate: true };
+    }
+    if (trimmed.startsWith('tags include ')) {
+      const tag = trimmed.substring('tags include '.length).trim();
+      return { type: 'tag', operator: 'includes', value: this.unquote(tag) };
+    }
+    if (trimmed === 'has tags') {
+      return { type: 'tag', operator: 'has', value: true };
+    }
+    if (trimmed === 'no tags') {
+      return { type: 'tag', operator: 'has', value: false };
+    }
+
+    // Path filters
+    if (trimmed.startsWith('path includes ')) {
+      const pattern = trimmed.substring('path includes '.length).trim();
+      return { type: 'path', operator: 'includes', value: this.unquote(pattern) };
+    }
+    if (trimmed.startsWith('path does not include ')) {
+      const pattern = trimmed.substring('path does not include '.length).trim();
+      return { type: 'path', operator: 'includes', value: this.unquote(pattern), negate: true };
+    }
+
+    // Dependency filters
+    if (trimmed === 'is blocked') {
+      return { type: 'dependency', operator: 'is-blocked', value: true };
+    }
+    if (trimmed === 'is not blocked') {
+      return { type: 'dependency', operator: 'is-blocked', value: false };
+    }
+    if (trimmed === 'is blocking') {
+      return { type: 'dependency', operator: 'is-blocking', value: true };
+    }
+
+    // Recurrence filters
+    if (trimmed === 'is recurring') {
+      return { type: 'recurrence', operator: 'is', value: true };
+    }
+    if (trimmed === 'is not recurring') {
+      return { type: 'recurrence', operator: 'is', value: false };
+    }
+
+    // Description filters
+    if (trimmed.startsWith('description includes ')) {
+      const pattern = trimmed.substring('description includes '.length).trim();
+      return { type: 'description', operator: 'includes', value: this.unquote(pattern) };
+    }
+    if (trimmed.startsWith('description does not include ')) {
+      const pattern = trimmed.substring('description does not include '.length).trim();
+      return { type: 'description', operator: 'does not include', value: this.unquote(pattern) };
+    }
+    if (trimmed.startsWith('description regex ')) {
+      const pattern = trimmed.substring('description regex '.length).trim();
+      return { type: 'description', operator: 'regex', value: this.unquote(pattern) };
+    }
+
+    // Heading filters
+    if (trimmed.startsWith('heading includes ')) {
+      const pattern = trimmed.substring('heading includes '.length).trim();
+      return { type: 'heading', operator: 'includes', value: this.unquote(pattern) };
+    }
+    if (trimmed.startsWith('heading does not include ')) {
+      const pattern = trimmed.substring('heading does not include '.length).trim();
+      return { type: 'heading', operator: 'does not include', value: this.unquote(pattern) };
+    }
+
+    // If we can't parse it, throw error
+    throw new QuerySyntaxError(
+      `Unknown filter instruction: "${trimmed}"`,
+      this.line,
+      this.column,
+      'Check the query syntax documentation for valid filter instructions'
+    );
+  }
+
 }
