@@ -69,19 +69,19 @@ export function explainFilter(filter: FilterNode): string {
       return `${negate}Recurrence ${filter.operator} ${filter.value}`;
 
     case 'boolean':
-      if (filter.operator === 'and') {
+      if (filter.operator === 'AND' || filter.operator === 'and') {
         return `(${explainFilter(filter.left!)} AND ${explainFilter(filter.right!)})`;
       }
-      if (filter.operator === 'or') {
+      if (filter.operator === 'OR' || filter.operator === 'or') {
         return `(${explainFilter(filter.left!)} OR ${explainFilter(filter.right!)})`;
       }
-      if (filter.operator === 'not') {
+      if (filter.operator === 'NOT' || filter.operator === 'not') {
         return `(NOT ${explainFilter(filter.inner!)})`;
       }
       return 'Unknown boolean filter';
 
     case 'done':
-      return filter.value ? `${negate}Done` : `${negate}Not done`;
+      return filter.value ? `${negate}done` : `${negate}not done`;
 
     case 'description':
       return `${negate}Description ${filter.operator} "${filter.value}"`;
