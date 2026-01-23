@@ -14,6 +14,14 @@ Create tasks directly in your notes using natural markdown syntax with emoji-bas
 - [ ] Deploy app 🆔 deploy-v2 ⛔ tests-pass 🔺 #release
 ```
 
+**🎯 Auto-Creation (Phase 3):**
+- ⚡ **Automatic task creation** - Press Enter or blur to auto-create tasks
+- 🛡️ **Duplicate prevention** - Won't create multiple tasks for the same checklist
+- 💡 **Visual error hints** - See parse errors inline without corrupting text
+- ⚙️ **Flexible settings** - Control when and how tasks are created
+
+[📖 Auto-Creation Guide](./docs/AUTO_CREATION.md) | [📖 Inline Syntax Reference](./docs/InlineTaskSyntax.md)
+
 **Supported metadata:**
 - 📅 **Due dates:** ISO dates or natural language (today, tomorrow, next week, etc.)
 - ⏳ **Scheduled dates:** When to start working
@@ -23,8 +31,6 @@ Create tasks directly in your notes using natural markdown syntax with emoji-bas
 - 🆔 **Task IDs:** Unique identifiers
 - ⛔ **Dependencies:** Link tasks together
 - #️⃣ **Tags:** Categorize and filter
-
-[📖 Complete Inline Task Syntax Guide](./docs/InlineTaskSyntax.md)
 
 ### 🔁 Advanced Recurrence Rules
 - **Daily, Weekly, Monthly scheduling** with customizable intervals
