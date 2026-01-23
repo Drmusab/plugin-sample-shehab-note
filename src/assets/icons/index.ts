@@ -152,6 +152,11 @@ export function getIconUrl(
   name: string,
   size: IconSize = 16
 ): string | undefined {
-  const icon = Icons[category]?.[name as any];
-  return icon?.[size as any];
+  const categoryIcons = Icons[category];
+  if (!categoryIcons) return undefined;
+  
+  const icon = categoryIcons[name as keyof typeof categoryIcons];
+  if (!icon) return undefined;
+  
+  return icon[size as keyof typeof icon];
 }
