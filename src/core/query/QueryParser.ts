@@ -134,7 +134,37 @@ export class QueryParser {
     }
   }
 
+  /**
+   * Normalize operator aliases to canonical forms
+   * Supports: &&->AND, ||->OR, !->NOT, -prefix->NOT, except->AND NOT
+   */
+  private normalizeOperatorAliases(line: string): string {
+    // Handle '-' prefix for negation (e.g., '-done' -> 'not done')
+    // Must be careful not to affect dates or other uses of '-'
+    // Only apply at the start of the line or after boolean operators
+    line = line.replace(/^-(\w+)/, 'not $1');
+    line = line.replace(/(\s+(?:and|AND|or|OR))\s+-(\w+)/gi, '$1 not $2');
+    
+    // Handle '!' prefix for negation (e.g., '!done' -> 'not done')
+    line = line.replace(/^!(\w+)/, 'not $1');
+    line = line.replace(/(\s+(?:and|AND|or|OR))\s+!(\w+)/gi, '$1 not $2');
+    
+    // Handle 'except' as 'AND NOT' (e.g., 'urgent except done' -> 'urgent AND NOT done')
+    line = line.replace(/\s+except\s+/gi, ' AND NOT ');
+    
+    // Handle '&&' as 'AND'
+    line = line.replace(/\s*&&\s*/g, ' AND ');
+    
+    // Handle '||' as 'OR'
+    line = line.replace(/\s*\|\|\s*/g, ' OR ');
+    
+    return line;
+  }
+
   private parseFilterInstruction(line: string): FilterNode | null {
+    // Normalize operator aliases first
+    line = this.normalizeOperatorAliases(line);
+    
     // Handle simple keywords first (before checking for boolean operators)
     if (line === 'done') {
       return { type: 'done', operator: 'is', value: true };
