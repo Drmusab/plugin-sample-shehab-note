@@ -3,6 +3,7 @@
   import type { EventService } from "@/services/EventService";
   import type { SettingsService } from "@/core/settings/SettingsService";
   import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
+  import type { InlineTaskSettings } from "@/core/settings/PluginSettings";
   import { DEFAULT_NOTIFICATION_CONFIG } from "@/utils/constants";
   import { toast } from "@/utils/notifications";
   import type { ShortcutManager, ShortcutDisplay } from "@/commands/ShortcutManager";
@@ -22,9 +23,18 @@
   let config = $state<NotificationConfig>(DEFAULT_NOTIFICATION_CONFIG);
   let testingChannel: string | null = $state(null);
   let testResults = $state<{ [key: string]: { success: boolean; message: string } }>({});
-  let activeSection = $state<'general' | 'filter' | 'statuses' | 'shortcuts'>('general');
+  let activeSection = $state<'general' | 'filter' | 'statuses' | 'shortcuts' | 'inlineTasks'>('general');
   let shortcutList = $state<ShortcutDisplay[]>([]);
   let shortcutDrafts = $state<Record<string, string>>({});
+  let inlineTaskSettings = $state<InlineTaskSettings>({
+    enableInlineCreation: true,
+    autoCreateOnEnter: false,
+    autoCreateOnBlur: false,
+    normalizeOnSave: true,
+    strictParsing: false,
+    showInlineHints: true,
+    highlightManagedTasks: true,
+  });
 
   function refreshShortcuts() {
     if (!shortcutManager) {
@@ -79,12 +89,29 @@
   $effect(() => {
     refreshShortcuts();
   });
+  
+  // Load inline task settings
+  $effect(() => {
+    const settings = settingsService.get();
+    if (settings.inlineTasks) {
+      inlineTaskSettings = { ...settings.inlineTasks };
+    }
+  });
 
   async function handleSave() {
     try {
       await eventService.saveConfig(config);
       toast.success("Settings saved successfully!");
       if (onClose) onClose();
+    } catch (err) {
+      toast.error("Failed to save settings: " + err);
+    }
+  }
+  
+  async function saveInlineTaskSettings() {
+    try {
+      await settingsService.update({ inlineTasks: inlineTaskSettings });
+      toast.success("Auto-creation settings saved!");
     } catch (err) {
       toast.error("Failed to save settings: " + err);
     }
@@ -144,6 +171,12 @@
         onclick={() => activeSection = 'shortcuts'}
       >
         Shortcuts
+      </button>
+      <button 
+        class="settings__nav-btn {activeSection === 'inlineTasks' ? 'active' : ''}"
+        onclick={() => activeSection = 'inlineTasks'}
+      >
+        Auto-Creation
       </button>
     </nav>
 
@@ -254,6 +287,134 @@
           <p class="settings__shortcut-note">
             Tip: You can also customize these in SiYuan's native shortcut settings.
           </p>
+        </section>
+      {:else if activeSection === 'inlineTasks'}
+        <section class="settings__section">
+          <div class="settings__section-header">
+            <h3 class="settings__section-title">Auto-Creation Settings</h3>
+            <label class="settings__toggle">
+              <input type="checkbox" bind:checked={inlineTaskSettings.enableInlineCreation} />
+              <span>Enable Inline Creation</span>
+            </label>
+          </div>
+          
+          <p class="settings__description">
+            Automatically create tasks from markdown checklists as you type.
+          </p>
+
+          <!-- Auto-creation Triggers -->
+          <div class="settings__subsection">
+            <h4 class="settings__subsection-title">Auto-Creation Triggers</h4>
+            
+            <label class="settings__checkbox">
+              <input 
+                type="checkbox" 
+                bind:checked={inlineTaskSettings.autoCreateOnEnter}
+                disabled={!inlineTaskSettings.enableInlineCreation}
+              />
+              <div>
+                <div class="settings__checkbox-label">Create on Enter</div>
+                <div class="settings__checkbox-description">
+                  Automatically create task when you press Enter after typing a checklist
+                </div>
+              </div>
+            </label>
+
+            <label class="settings__checkbox">
+              <input 
+                type="checkbox" 
+                bind:checked={inlineTaskSettings.autoCreateOnBlur}
+                disabled={!inlineTaskSettings.enableInlineCreation}
+              />
+              <div>
+                <div class="settings__checkbox-label">Create on Blur</div>
+                <div class="settings__checkbox-description">
+                  Automatically create task when you click away from a checklist (debounced)
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Normalization -->
+          <div class="settings__subsection">
+            <h4 class="settings__subsection-title">Normalization</h4>
+            
+            <label class="settings__checkbox">
+              <input 
+                type="checkbox" 
+                bind:checked={inlineTaskSettings.normalizeOnSave}
+                disabled={!inlineTaskSettings.enableInlineCreation}
+              />
+              <div>
+                <div class="settings__checkbox-label">Normalize on Save</div>
+                <div class="settings__checkbox-description">
+                  Reformat checklist text to standard format after task creation
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Parsing Mode -->
+          <div class="settings__subsection">
+            <h4 class="settings__subsection-title">Parsing Mode</h4>
+            
+            <label class="settings__checkbox">
+              <input 
+                type="checkbox" 
+                bind:checked={inlineTaskSettings.strictParsing}
+                disabled={!inlineTaskSettings.enableInlineCreation}
+              />
+              <div>
+                <div class="settings__checkbox-label">Strict Parsing</div>
+                <div class="settings__checkbox-description">
+                  Reject tasks with invalid syntax (warning: may be frustrating)
+                </div>
+              </div>
+            </label>
+            
+            {#if inlineTaskSettings.strictParsing}
+              <div class="settings__warning">
+                ⚠️ Strict mode enabled - tasks with any parsing errors will be rejected
+              </div>
+            {/if}
+          </div>
+
+          <!-- Visual Indicators -->
+          <div class="settings__subsection">
+            <h4 class="settings__subsection-title">Visual Indicators</h4>
+            
+            <label class="settings__checkbox">
+              <input 
+                type="checkbox" 
+                bind:checked={inlineTaskSettings.showInlineHints}
+                disabled={!inlineTaskSettings.enableInlineCreation}
+              />
+              <div>
+                <div class="settings__checkbox-label">Show Error Hints</div>
+                <div class="settings__checkbox-description">
+                  Display inline error messages when task parsing fails
+                </div>
+              </div>
+            </label>
+
+            <label class="settings__checkbox">
+              <input 
+                type="checkbox" 
+                bind:checked={inlineTaskSettings.highlightManagedTasks}
+                disabled={!inlineTaskSettings.enableInlineCreation}
+              />
+              <div>
+                <div class="settings__checkbox-label">Highlight Managed Tasks</div>
+                <div class="settings__checkbox-description">
+                  Add visual indicator to checklists that have linked tasks
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <button class="settings__save-btn" onclick={saveInlineTaskSettings}>
+            Save Auto-Creation Settings
+          </button>
         </section>
       {/if}
     </div>
@@ -576,6 +737,67 @@
 
   .settings__save-btn:hover {
     background: var(--b3-theme-primary-light);
+  }
+  
+  /* Auto-Creation Settings Styles */
+  .settings__description {
+    color: var(--b3-theme-on-surface-light);
+    font-size: 14px;
+    margin-bottom: 24px;
+    line-height: 1.6;
+  }
+  
+  .settings__subsection {
+    margin-bottom: 32px;
+  }
+  
+  .settings__subsection-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--b3-theme-on-surface);
+    margin-bottom: 16px;
+  }
+  
+  .settings__checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+    cursor: pointer;
+  }
+  
+  .settings__checkbox input[type="checkbox"] {
+    margin-top: 2px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  
+  .settings__checkbox input[type="checkbox"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .settings__checkbox-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--b3-theme-on-surface);
+    margin-bottom: 4px;
+  }
+  
+  .settings__checkbox-description {
+    font-size: 13px;
+    color: var(--b3-theme-on-surface-light);
+    line-height: 1.5;
+  }
+  
+  .settings__warning {
+    background: var(--b3-theme-error-lighter, rgba(244, 67, 54, 0.1));
+    border: 1px solid var(--b3-theme-error);
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--b3-theme-on-surface);
   }
 
   @media (max-width: 768px) {

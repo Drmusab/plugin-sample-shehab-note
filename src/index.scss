@@ -53,6 +53,37 @@ select:focus-visible {
   outline-offset: 2px;
 }
 
+/* Inline Task Styles - Phase 3 Auto-Creation */
+
+/* Error state for failed task parsing */
+.task-parse-error {
+  border-left: 2px solid var(--b3-theme-error);
+  background-color: var(--b3-theme-error-lighter, rgba(244, 67, 54, 0.1));
+  padding-left: 8px;
+}
+
+/* Error icon for inline hints */
+.task-error-icon {
+  display: inline-block;
+  color: var(--b3-theme-error);
+  cursor: help;
+  margin-left: 4px;
+  font-size: 14px;
+}
+
+/* Managed task indicator */
+.task-managed {
+  border-left: 2px solid var(--b3-theme-primary);
+  background-color: var(--b3-theme-primary-lighter, rgba(33, 150, 243, 0.05));
+  padding-left: 8px;
+}
+
+/* Hover effect for managed tasks */
+.task-managed:hover {
+  background-color: var(--b3-theme-primary-lighter, rgba(33, 150, 243, 0.1));
+}
+
+
 /* Animation for overlays */
 @keyframes fadeIn {
   from {

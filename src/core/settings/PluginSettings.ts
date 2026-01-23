@@ -96,6 +96,9 @@ export interface PluginSettings {
 
   /** Keyboard navigation configuration */
   keyboardNavigation: KeyboardNavigationSettings;
+  
+  /** Inline task auto-creation configuration (Phase 3) */
+  inlineTasks: InlineTaskSettings;
 }
 
 /**
@@ -157,6 +160,28 @@ export interface KeyboardNavigationSettings {
   showModeIndicator: boolean;
   showQuickHints: boolean;
   enableCommandPalette: boolean;
+}
+
+/**
+ * Inline task settings (Phase 3)
+ */
+export interface InlineTaskSettings {
+  /** Core toggle */
+  enableInlineCreation: boolean;
+  
+  /** Auto-creation mode */
+  autoCreateOnEnter: boolean;
+  autoCreateOnBlur: boolean;
+  
+  /** Normalization */
+  normalizeOnSave: boolean;
+  
+  /** Strict mode */
+  strictParsing: boolean;
+  
+  /** UI */
+  showInlineHints: boolean;
+  highlightManagedTasks: boolean;
 }
 
 /**
@@ -222,6 +247,15 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     showModeIndicator: true,
     showQuickHints: true,
     enableCommandPalette: true,
+  },
+  inlineTasks: {
+    enableInlineCreation: true,
+    autoCreateOnEnter: false,
+    autoCreateOnBlur: false,
+    normalizeOnSave: true,
+    strictParsing: false,
+    showInlineHints: true,
+    highlightManagedTasks: true,
   },
 };
 
@@ -315,6 +349,10 @@ export function mergeSettings(userSettings: Partial<PluginSettings>): PluginSett
       ...DEFAULT_SETTINGS.keyboardNavigation,
       ...userSettings.keyboardNavigation,
       customKeybindings: userSettings.keyboardNavigation?.customKeybindings ?? DEFAULT_SETTINGS.keyboardNavigation.customKeybindings,
+    },
+    inlineTasks: {
+      ...DEFAULT_SETTINGS.inlineTasks,
+      ...userSettings.inlineTasks,
     },
   };
 }
