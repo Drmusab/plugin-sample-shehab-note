@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { CompletionHandler } from '../CompletionHandler';
 import type { Task } from '@/core/models/Task';
 import type { TaskStorage, SiYuanBlockAPI } from '../CompletionHandler';
-import { RecurrenceEngine } from '@/core/engine/RecurrenceEngine';
+import { RecurrenceEngineRRULE as RecurrenceEngine } from '@/core/engine/recurrence/RecurrenceEngineRRULE';
 import { DEFAULT_SETTINGS } from '@/core/settings/PluginSettings';
 
 describe('CompletionHandler', () => {

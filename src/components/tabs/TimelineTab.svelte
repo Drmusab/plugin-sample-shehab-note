@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Task } from "@/core/models/Task";
-  import type { RecurrenceEngine } from "@/core/engine/RecurrenceEngine";
+  import type { RecurrenceEngineRRULE as RecurrenceEngine } from "@/core/engine/recurrence/RecurrenceEngineRRULE";
   import {
     addDays,
     endOfDay,

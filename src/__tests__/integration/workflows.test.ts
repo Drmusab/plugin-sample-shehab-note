@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTask } from '@/core/models/Task';
 import type { Task } from '@/core/models/Task';
-import { RecurrenceEngine } from '@/core/engine/RecurrenceEngine';
+import { RecurrenceEngineRRULE as RecurrenceEngine } from '@/core/engine/recurrence/RecurrenceEngineRRULE';
 import { StatusRegistry } from '@/core/models/StatusRegistry';
 
 describe('Phase 6: Workflow Integration Tests', () => {

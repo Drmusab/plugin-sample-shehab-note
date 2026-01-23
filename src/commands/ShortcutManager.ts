@@ -1,6 +1,6 @@
 import type { Plugin } from "siyuan";
 import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
-import type { RecurrenceEngine } from "@/core/engine/RecurrenceEngine";
+import type { RecurrenceEngineRRULE as RecurrenceEngine } from "@/core/engine/recurrence/RecurrenceEngineRRULE";
 import type { PluginSettings } from "@/core/settings/PluginSettings";
 import { TaskCommands } from "@/commands/TaskCommands";
 import { SettingUtils } from "@/utils/SettingUtils";

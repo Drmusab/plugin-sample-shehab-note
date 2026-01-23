@@ -4,7 +4,7 @@
 
 import type { Task } from "@/core/models/Task";
 import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
-import type { RecurrenceEngine } from "@/core/engine/RecurrenceEngine";
+import type { RecurrenceEngineRRULE as RecurrenceEngine } from "@/core/engine/recurrence/RecurrenceEngineRRULE";
 import type { PluginSettings } from "@/core/settings/PluginSettings";
 import { StatusRegistry } from "@/core/models/StatusRegistry";
 import { pluginEventBus } from "@/core/events/PluginEventBus";

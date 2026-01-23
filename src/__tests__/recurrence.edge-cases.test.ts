@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { RecurrenceEngine } from "@/core/engine/RecurrenceEngine";
+import { RecurrenceEngineRRULE as RecurrenceEngine } from "@/core/engine/recurrence/RecurrenceEngineRRULE";
 import type { Frequency } from "@/core/models/Frequency";
 import { MAX_RECOVERY_ITERATIONS } from "@/utils/constants";
 
