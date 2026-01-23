@@ -30,6 +30,7 @@
   import InsightsTab from "./tabs/InsightsTab.svelte";
   import TaskEditorModal from "./TaskEditorModal.svelte";
   import Settings from "./settings/Settings.svelte";
+  import Icon from "./ui/Icon.svelte";
 
   interface Props {
     repository: TaskRepositoryProvider;
@@ -461,7 +462,7 @@
         aria-controls="dashboard-panel"
         onclick={() => (activeTab = "inbox")}
       >
-        📥 Inbox
+        <Icon category="navigation" name="inbox" size={16} alt="Inbox" /> Inbox
         {#if inboxCount > 0}
           <span class="dashboard__tab-badge">{inboxCount}</span>
         {/if}
@@ -474,7 +475,7 @@
         aria-controls="dashboard-panel"
         onclick={() => (activeTab = "today")}
       >
-        📋 Today
+        <Icon category="navigation" name="today" size={16} alt="Today" /> Today
         {#if todayTasks.length > 0}
           <span class="dashboard__tab-badge">{todayTasks.length}</span>
         {/if}
@@ -487,7 +488,7 @@
         aria-controls="dashboard-panel"
         onclick={() => (activeTab = "upcoming")}
       >
-        📅 Upcoming
+        <Icon category="navigation" name="calendar" size={16} alt="Upcoming" /> Upcoming
         {#if upcomingCount > 0}
           <span class="dashboard__tab-badge">{upcomingCount}</span>
         {/if}
@@ -500,7 +501,7 @@
         aria-controls="dashboard-panel"
         onclick={() => (activeTab = "done")}
       >
-        ✅ Done
+        <Icon category="navigation" name="done" size={16} alt="Done" /> Done
         {#if doneCount > 0}
           <span class="dashboard__tab-badge">{doneCount}</span>
         {/if}
@@ -513,7 +514,7 @@
         aria-controls="dashboard-panel"
         onclick={() => (activeTab = "projects")}
       >
-        📁 Projects
+        <Icon category="navigation" name="folder" size={16} alt="Projects" /> Projects
         {#if projectsCount > 0}
           <span class="dashboard__tab-badge">{projectsCount}</span>
         {/if}
@@ -526,7 +527,7 @@
         aria-controls="dashboard-panel"
         onclick={() => (activeTab = "search")}
       >
-        🔍 Search
+        <Icon category="navigation" name="search" size={16} alt="Search" /> Search
       </button>
       <button
         id="dashboard-tab-all"
@@ -536,7 +537,7 @@
         aria-controls="dashboard-panel"
         onclick={() => (activeTab = "all")}
       >
-        📝 All
+        <Icon category="navigation" name="list" size={16} alt="All" /> All
         <span class="dashboard__tab-badge">{allTasks.length}</span>
       </button>
       <button
@@ -547,7 +548,7 @@
         aria-controls="dashboard-panel"
         onclick={() => (activeTab = "insights")}
       >
-        💡 Insights
+        <Icon category="navigation" name="insights" size={16} alt="Insights" /> Insights
       </button>
     </div>
 

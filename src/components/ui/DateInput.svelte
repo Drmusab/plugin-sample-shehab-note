@@ -1,5 +1,6 @@
 <script lang="ts">
   import { DateParser, type DateSuggestion } from '@/core/parsers/DateParser';
+  import Icon from '@/components/ui/Icon.svelte';
   
   interface Props {
     value?: string;
@@ -199,7 +200,7 @@
     }
     
     const formatted = DateParser.formatDateForDisplay(parsedDate, showTime);
-    return relative ? `📅 ${formatted} (${relative})` : `📅 ${formatted}`;
+    return relative ? `${formatted} (${relative})` : formatted;
   });
 </script>
 
@@ -247,17 +248,17 @@
           aria-label="Clear input"
           title="Clear"
         >
-          ✕
+          <Icon category="actions" name="close" size={16} alt="Clear" />
         </button>
       {/if}
 
       {#if isValid && !error}
         <span class="date-input__icon date-input__valid" title="Valid date">
-          ✓
+          <Icon category="actions" name="check" size={16} alt="Valid" />
         </span>
       {:else if error}
         <span class="date-input__icon date-input__error-icon" title={error}>
-          ⚠
+          <Icon category="status" name="warning" size={16} alt="Warning" />
         </span>
       {/if}
 
@@ -269,7 +270,7 @@
         title="Open date picker"
         {disabled}
       >
-        📅
+        <Icon category="navigation" name="calendar" size={16} alt="Calendar" />
       </button>
     </div>
 
@@ -284,7 +285,9 @@
             role="option"
             aria-selected={index === selectedIndex}
           >
-            <span class="date-input__suggestion-icon">{suggestion.icon || '📅'}</span>
+            {#if suggestion.icon}
+              <span class="date-input__suggestion-icon">{suggestion.icon}</span>
+            {/if}
             <div class="date-input__suggestion-content">
               <div class="date-input__suggestion-text">{suggestion.text}</div>
               <div class="date-input__suggestion-description">{suggestion.description}</div>

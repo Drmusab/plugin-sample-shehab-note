@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { TaskSuggestion } from '@/core/ai/SmartSuggestionEngine';
+  import Icon from '@/components/ui/Icon.svelte';
+  import type { IconCategory } from '@/assets/icons';
 
   interface Props {
     suggestions: TaskSuggestion[];
@@ -9,15 +11,15 @@
 
   let { suggestions = [], onAccept, onDismiss }: Props = $props();
 
-  function getSuggestionIcon(type: string): string {
+  function getSuggestionIconInfo(type: string): { category: IconCategory; name: string; size: 16 | 20 | 24 } {
     switch (type) {
-      case 'reschedule': return '⏰';
-      case 'urgency': return '⚠️';
-      case 'consolidate': return '📦';
-      case 'delegate': return '👥';
-      case 'frequency': return '📊';
-      case 'abandon': return '🗑️';
-      default: return '💡';
+      case 'reschedule': return { category: 'status', name: 'clock', size: 16 };
+      case 'urgency': return { category: 'status', name: 'warning', size: 16 };
+      case 'consolidate': return { category: 'features', name: 'consolidate', size: 24 };
+      case 'delegate': return { category: 'features', name: 'delegate', size: 24 };
+      case 'frequency': return { category: 'features', name: 'analytics', size: 24 };
+      case 'abandon': return { category: 'actions', name: 'delete', size: 16 };
+      default: return { category: 'features', name: 'suggestion', size: 24 };
     }
   }
 
@@ -42,9 +44,12 @@
   {:else}
     <div class="suggestions-list">
       {#each suggestions as suggestion}
+        {@const iconInfo = getSuggestionIconInfo(suggestion.type)}
         <div class="suggestion-card" data-type={suggestion.type} data-color={getSuggestionColor(suggestion.type)}>
           <div class="suggestion-header">
-            <span class="suggestion-icon">{getSuggestionIcon(suggestion.type)}</span>
+            <span class="suggestion-icon">
+              <Icon category={iconInfo.category} name={iconInfo.name} size={iconInfo.size} alt={suggestion.type} />
+            </span>
             <span class="suggestion-type">{suggestion.type}</span>
             <span class="confidence-badge" data-confidence={Math.round(suggestion.confidence * 100)}>
               {Math.round(suggestion.confidence * 100)}% confident

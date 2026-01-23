@@ -8,6 +8,7 @@
   import { daysBetween, formatDateTime, isOverdue, isToday } from "@/utils/date";
   import { PRIORITY_COLORS, SNOOZE_OPTIONS } from "@/utils/constants";
   import { URGENCY_SETTINGS_CONTEXT_KEY } from "@/core/urgency/UrgencyContext";
+  import Icon from "@/components/ui/Icon.svelte";
 
   interface Props {
     task: Task;
@@ -57,7 +58,6 @@
   });
 
   const hasStreak = $derived((task. currentStreak || 0) > 0);
-  const streakEmoji = $derived(() => "🔥");
 
   const health = $derived(calculateTaskHealth(task));
   const healthClass = $derived(
@@ -237,7 +237,7 @@
       <h3 class="task-card__name">{task.name}</h3>
       {#if hasStreak}
         <span class="task-card__streak" title="{task.currentStreak} day streak">
-          {streakEmoji()} {task.currentStreak}
+          <Icon category="status" name="streak" size={16} alt="Streak" /> {task.currentStreak}
         </span>
       {/if}
     </div>
