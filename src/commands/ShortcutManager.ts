@@ -36,6 +36,7 @@ export interface ShortcutHandlers {
   postponeTask: (taskId: string) => void;
   openDock: () => void;
   openTaskEditor: () => void;
+  createTaskFromBlock: () => void | Promise<void>;
 }
 
 const SHORTCUT_SETTINGS_KEY = "recurring-task-shortcuts";
@@ -186,6 +187,9 @@ export class ShortcutManager {
       }
       case "openTaskEditor":
         this.handlers.openTaskEditor();
+        break;
+      case "createTaskFromBlock":
+        await this.handlers.createTaskFromBlock();
         break;
       default:
         break;

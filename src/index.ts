@@ -23,6 +23,8 @@ import { pluginEventBus } from "./core/events/PluginEventBus";
 import { snoozeTask } from "./utils/snooze";
 import type { ShortcutManager } from "./commands/ShortcutManager";
 import { InlineQueryController } from "./core/inline-query/InlineQueryController";
+import { handleCreateTaskFromBlock } from "./commands/CreateTaskFromBlock";
+import { SiYuanApiAdapter } from "./core/api/SiYuanApiAdapter";
 import "./index.scss";
 
 export default class RecurringTasksPlugin extends Plugin {
@@ -90,6 +92,7 @@ export default class RecurringTasksPlugin extends Plugin {
         postponeTask: (taskId) => this.openPostponePicker(taskId),
         openDock: () => this.openDock(),
         openTaskEditor: () => this.openTaskEditor(),
+        createTaskFromBlock: () => this.handleCreateTaskFromBlock(),
       },
       this.scheduler.getRecurrenceEngine(),
       () => settingsService.get()
@@ -776,6 +779,23 @@ export default class RecurringTasksPlugin extends Plugin {
       this.taskEditorContainer.remove();
       this.taskEditorContainer = null;
     }
+  }
+
+  /**
+   * Handle create/edit task from block command
+   * Parses inline task format and opens editor with pre-populated data
+   */
+  private async handleCreateTaskFromBlock(): Promise<void> {
+    const apiAdapter = new SiYuanApiAdapter();
+    
+    await handleCreateTaskFromBlock({
+      repository: this.repository,
+      blockApi: apiAdapter,
+      openTaskEditor: (task, initialData) => {
+        // Open editor with the task
+        this.openTaskEditor(task);
+      }
+    });
   }
 
   // ========== Helper Methods for Global Filter Commands ==========

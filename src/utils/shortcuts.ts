@@ -6,7 +6,8 @@ export type ShortcutId =
   | "postponeTask"
   | "quickCompleteNextTask"
   | "toggleTaskStatus"
-  | "openTaskEditor";
+  | "openTaskEditor"
+  | "createTaskFromBlock";
 
 export interface ShortcutDefinition {
   id: ShortcutId;
@@ -81,6 +82,14 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     description: "Open the full task editor modal.",
     defaultHotkey: "Ctrl+Shift+E",
     context: "Global",
+  },
+  {
+    id: "createTaskFromBlock",
+    langKey: "createTaskFromBlock",
+    label: "Create or Edit Task from Block",
+    description: "Parse current block as inline task and open editor with pre-populated data.",
+    defaultHotkey: "Ctrl+Shift+I",
+    context: "Editor / Block",
   },
 ];
 
