@@ -6,6 +6,7 @@ import type { Plugin } from "siyuan";
 import type { Task } from "@/core/models/Task";
 import { CURRENT_SCHEMA_VERSION } from "@/utils/constants";
 import * as logger from "@/utils/logger";
+import { migrateAllTasksToRRule } from "@/core/storage/migrations/RRuleMigration";
 
 export interface MigrationResult {
   migrated: boolean;
@@ -80,6 +81,7 @@ export class MigrationManager {
       let fromVersion: number | undefined;
       let tasksAffected = 0;
 
+      // First, run standard version migrations
       for (let i = 0; i < tasks.length; i++) {
         const task = tasks[i];
         const originalVersion = task.version || 0;
@@ -95,6 +97,22 @@ export class MigrationManager {
           tasks[i] = this.migrateTask(task, originalVersion);
           tasksAffected++;
           logger.info(`Migrated task ${task.id} from v${originalVersion} to v${CURRENT_SCHEMA_VERSION}`);
+        }
+      }
+
+      // Run RRULE migration (v5+) - this is idempotent
+      const rruleMigrationResult = await migrateAllTasksToRRule(tasks);
+      if (rruleMigrationResult.migrated > 0) {
+        if (!migrated) {
+          // Create backup if RRULE migration is the first change
+          fromVersion = 4; // Assume we're migrating from v4 to v5
+          backupKey = await this.createBackup(storageKey, fromVersion);
+          migrated = true;
+        }
+        tasksAffected += rruleMigrationResult.migrated;
+        // Update tasks array with migrated tasks
+        for (let i = 0; i < rruleMigrationResult.migratedTasks.length; i++) {
+          tasks[i] = rruleMigrationResult.migratedTasks[i];
         }
       }
 
@@ -177,6 +195,16 @@ export class MigrationManager {
         onCompletion: (migrated as any).onCompletion || 'keep',
         dependsOn: (migrated as any).dependsOn || [],
         blockedBy: (migrated as any).blockedBy || [],
+      };
+    }
+
+    // v4 -> v5: Migrate to RRULE format
+    if (fromVersion < 5) {
+      // Note: Actual RRULE migration is handled separately by RRuleMigration
+      // This just updates the version number
+      migrated = {
+        ...migrated,
+        version: 5,
       };
     }
 

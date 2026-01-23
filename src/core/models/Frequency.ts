@@ -5,6 +5,9 @@ export type FrequencyType = "daily" | "weekly" | "monthly" | "yearly";
 
 /**
  * Frequency/Recurrence rule definition
+ * 
+ * NOTE: Migration to RRULE format in progress. New tasks should use rruleString.
+ * Legacy fields (type, interval, etc.) are kept for backward compatibility.
  */
 export type Frequency =
   | {
@@ -22,6 +25,8 @@ export type Frequency =
       whenDone?: boolean;
       /** RFC 5545 rrule string for complex patterns */
       rruleString?: string;
+      /** DTSTART in ISO format (UTC) - required for RRULE */
+      dtstart?: string;
       /** Original natural language input */
       naturalLanguage?: string;
     }
@@ -42,6 +47,8 @@ export type Frequency =
       whenDone?: boolean;
       /** RFC 5545 rrule string for complex patterns */
       rruleString?: string;
+      /** DTSTART in ISO format (UTC) - required for RRULE */
+      dtstart?: string;
       /** Original natural language input */
       naturalLanguage?: string;
     }
@@ -62,6 +69,8 @@ export type Frequency =
       whenDone?: boolean;
       /** RFC 5545 rrule string for complex patterns */
       rruleString?: string;
+      /** DTSTART in ISO format (UTC) - required for RRULE */
+      dtstart?: string;
       /** Original natural language input */
       naturalLanguage?: string;
     }
@@ -84,6 +93,8 @@ export type Frequency =
       whenDone?: boolean;
       /** RFC 5545 rrule string for complex patterns */
       rruleString?: string;
+      /** DTSTART in ISO format (UTC) - required for RRULE */
+      dtstart?: string;
       /** Original natural language input */
       naturalLanguage?: string;
     };
