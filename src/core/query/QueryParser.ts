@@ -629,10 +629,8 @@ export class QueryParser {
     
     // Special case: "not X regex" patterns should be handled by atomic filter parsing
     // Check these before general NOT parsing
-    if (trimmed.startsWith('not description regex ') || 
-        trimmed.startsWith('not path regex ') || 
-        trimmed.startsWith('not tag regex ') ||
-        trimmed.startsWith('not tags regex ')) {
+    const regexPatterns = ['not description regex ', 'not path regex ', 'not tag regex ', 'not tags regex '];
+    if (regexPatterns.some(pattern => trimmed.startsWith(pattern))) {
       return this.parsePrimaryExpression(trimmed);
     }
     

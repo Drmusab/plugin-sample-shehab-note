@@ -107,8 +107,9 @@ export class RegexMatcher {
     }
 
     // Check for duplicate flags
-    const uniqueFlags = new Set(flags.split(''));
-    if (uniqueFlags.size !== flags.length) {
+    const flagsArray = Array.from(flags);
+    const uniqueFlags = new Set(flagsArray);
+    if (uniqueFlags.size !== flagsArray.length) {
       return { valid: false, error: 'Duplicate flags found' };
     }
 
