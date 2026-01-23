@@ -19,7 +19,7 @@ describe("Task Model", () => {
       expect(task.bestStreak).toBe(0);
       expect(task.snoozeCount).toBe(0);
       expect(task.maxSnoozes).toBe(3);
-      expect(task.version).toBe(4);
+      expect(task.version).toBe(5);
       expect(Array.isArray(task.recentCompletions)).toBe(true);
     });
 

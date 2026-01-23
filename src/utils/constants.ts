@@ -27,8 +27,9 @@ export const EMITTED_OCCURRENCES_KEY = "scheduler-emitted-occurrences";
 
 /**
  * Schema version for data migrations
+ * v5: RRULE migration - all tasks now use RFC 5545-compliant RRULE format
  */
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 /**
  * Default n8n event configuration

@@ -1,4 +1,5 @@
 import type { Frequency } from "../models/Frequency";
+import { RRule, Frequency as RRuleFreq } from "rrule";
 
 /**
  * Parsed recurrence result
@@ -73,8 +74,16 @@ export class RecurrenceParser {
     // Try to parse "weekday" or "weekend" pattern
     if (rest === 'weekday' || rest === 'weekdays') {
       // Monday=0 to Friday=4
+      const weekdays = [0, 1, 2, 3, 4];
       return {
-        frequency: { type: "weekly", interval: 1, weekdays: [0, 1, 2, 3, 4], whenDone },
+        frequency: { 
+          type: "weekly", 
+          interval: 1, 
+          weekdays, 
+          whenDone,
+          rruleString: this.buildWeeklyRRuleString(1, weekdays),
+          naturalLanguage: raw,
+        },
         raw,
         isValid: true,
       };
@@ -82,8 +91,16 @@ export class RecurrenceParser {
 
     if (rest === 'weekend' || rest === 'weekends') {
       // Saturday=5, Sunday=6
+      const weekdays = [5, 6];
       return {
-        frequency: { type: "weekly", interval: 1, weekdays: [5, 6], whenDone },
+        frequency: { 
+          type: "weekly", 
+          interval: 1, 
+          weekdays, 
+          whenDone,
+          rruleString: this.buildWeeklyRRuleString(1, weekdays),
+          naturalLanguage: raw,
+        },
         raw,
         isValid: true,
       };
@@ -124,7 +141,13 @@ export class RecurrenceParser {
     if (dailyMatch) {
       const interval = dailyMatch[1] ? parseInt(dailyMatch[1]) : 1;
       return {
-        frequency: { type: "daily", interval, whenDone },
+        frequency: { 
+          type: "daily", 
+          interval, 
+          whenDone,
+          rruleString: this.buildDailyRRuleString(interval),
+          naturalLanguage: raw,
+        },
         raw,
         isValid: true,
       };
@@ -138,8 +161,16 @@ export class RecurrenceParser {
 
       if (!daysStr) {
         // No specific days, default to current day of week
+        const weekdays = [1]; // Default to Monday
         return {
-          frequency: { type: "weekly", interval, weekdays: [1], whenDone }, // Default to Monday
+          frequency: { 
+            type: "weekly", 
+            interval, 
+            weekdays, 
+            whenDone,
+            rruleString: this.buildWeeklyRRuleString(interval, weekdays),
+            naturalLanguage: raw,
+          },
           raw,
           isValid: true,
         };
@@ -157,7 +188,14 @@ export class RecurrenceParser {
       }
 
       return {
-        frequency: { type: "weekly", interval, weekdays, whenDone },
+        frequency: { 
+          type: "weekly", 
+          interval, 
+          weekdays, 
+          whenDone,
+          rruleString: this.buildWeeklyRRuleString(interval, weekdays),
+          naturalLanguage: raw,
+        },
         raw,
         isValid: true,
       };
@@ -179,7 +217,14 @@ export class RecurrenceParser {
       }
 
       return {
-        frequency: { type: "monthly", interval, dayOfMonth, whenDone },
+        frequency: { 
+          type: "monthly", 
+          interval, 
+          dayOfMonth, 
+          whenDone,
+          rruleString: this.buildMonthlyRRuleString(interval, dayOfMonth),
+          naturalLanguage: raw,
+        },
         raw,
         isValid: true,
       };
@@ -190,7 +235,15 @@ export class RecurrenceParser {
     if (yearlyMatch) {
       const interval = yearlyMatch[1] ? parseInt(yearlyMatch[1]) : 1;
       return {
-        frequency: { type: "yearly", interval, month: 0, dayOfMonth: 1, whenDone },
+        frequency: { 
+          type: "yearly", 
+          interval, 
+          month: 0, 
+          dayOfMonth: 1, 
+          whenDone,
+          rruleString: this.buildYearlyRRuleString(interval),
+          naturalLanguage: raw,
+        },
         raw,
         isValid: true,
       };
@@ -493,5 +546,36 @@ export class RecurrenceParser {
       case 3: return "rd";
       default: return "th";
     }
+  }
+
+  /**
+   * Build RRULE string for daily recurrence
+   */
+  private static buildDailyRRuleString(interval: number): string {
+    return `FREQ=DAILY;INTERVAL=${interval}`;
+  }
+
+  /**
+   * Build RRULE string for weekly recurrence
+   */
+  private static buildWeeklyRRuleString(interval: number, weekdays: number[]): string {
+    const byDay = weekdays.map(d => this.toRRuleWeekday(d)).join(',');
+    return `FREQ=WEEKLY;INTERVAL=${interval};BYDAY=${byDay}`;
+  }
+
+  /**
+   * Build RRULE string for monthly recurrence
+   */
+  private static buildMonthlyRRuleString(interval: number, dayOfMonth: number): string {
+    // Use BYMONTHDAY=-1 for last day of month (day 31)
+    const byMonthDay = dayOfMonth === 31 ? -1 : dayOfMonth;
+    return `FREQ=MONTHLY;INTERVAL=${interval};BYMONTHDAY=${byMonthDay}`;
+  }
+
+  /**
+   * Build RRULE string for yearly recurrence
+   */
+  private static buildYearlyRRuleString(interval: number): string {
+    return `FREQ=YEARLY;INTERVAL=${interval}`;
   }
 }

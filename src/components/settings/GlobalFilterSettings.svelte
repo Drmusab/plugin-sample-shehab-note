@@ -563,7 +563,7 @@
             {/each}
           </ul>
         </details>
-      {: else if filterConfig.enabled}
+      {:else if filterConfig.enabled}
         <div class="no-excluded">
           ✓ All tasks pass the current filter
         </div>
@@ -581,7 +581,7 @@
         <li><strong>Debugging:</strong> Enable "Show Explain Mode" to see why tasks are excluded</li>
       </ul>
     </div>
-  {: else}
+  {:else}
     <div class="disabled-state">
       <p>Global Filter is disabled. All tasks will be included.</p>
       <p class="hint">Enable to start filtering tasks by path, tags, or regex patterns.</p>
@@ -714,7 +714,7 @@
     font-size: 1.1rem;
   }
 
-  . help-text {
+  .help-text {
     font-size: 0.9rem;
     color: var(--text-muted);
     margin:  0 0 1rem 0;
@@ -729,7 +729,7 @@
     font-size: 0.85rem;
   }
 
-  . dual-input {
+  .dual-input {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
@@ -741,7 +741,7 @@
     gap: 0.4rem;
   }
 
-  . label-with-badge {
+  .label-with-badge {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -797,7 +797,7 @@
     border-radius: 4px;
   }
 
-  . targets-label {
+  .targets-label {
     font-weight: 500;
     font-size: 0.9rem;
   }
@@ -837,7 +837,7 @@
     margin-bottom: 0.25rem;
   }
 
-  . profile-save-actions {
+  .profile-save-actions {
     display: flex;
     gap: 1rem;
     margin-top: 1.5rem;
@@ -857,7 +857,7 @@
     margin-bottom: 1rem;
   }
 
-  . preview-header h3 {
+  .preview-header h3 {
     margin:  0;
   }
 
@@ -887,7 +887,7 @@
     border-radius: 50%;
   }
 
-  .stat-included . stat-icon {
+  .stat-included .stat-icon {
     background:  var(--text-success);
     color: white;
   }
@@ -897,7 +897,7 @@
     color: white;
   }
 
-  .stat-total . stat-icon {
+  .stat-total .stat-icon {
     background:  var(--interactive-accent);
     color: white;
   }
@@ -982,7 +982,7 @@
     margin-top: 0.5rem;
   }
 
-  . no-excluded {
+  .no-excluded {
     text-align: center;
     padding:  2rem;
     color:  var(--text-success);
@@ -1001,7 +1001,7 @@
     margin:  0 0 1rem 0;
   }
 
-  . quick-tips ul {
+  .quick-tips ul {
     margin: 0;
     padding-left: 1.5rem;
   }
@@ -1044,7 +1044,7 @@
     background: var(--interactive-hover);
   }
 
-  button. primary {
+  button.primary {
     background: var(--interactive-accent);
     color: white;
   }
@@ -1057,12 +1057,12 @@
     background: var(--background-modifier-border);
   }
 
-  button: disabled {
+  button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  button: disabled:hover {
+  button:disabled:hover {
     background: var(--interactive-normal);
   }
 

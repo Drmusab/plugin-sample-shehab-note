@@ -6,6 +6,12 @@ import { RRule, rrulestr } from 'rrule';
 import { toUTC, fromUTC, getUserTimezone } from "@/utils/timezone";
 
 /**
+ * @deprecated This custom recurrence engine is deprecated in favor of RecurrenceEngineRRULE.
+ * It will be removed in v2.0.0 after all tasks are migrated to RRULE format.
+ * DO NOT use this for new code.
+ * 
+ * For new code, use: import { RecurrenceEngineRRULE } from "@/core/engine/recurrence/RecurrenceEngineRRULE"
+ * 
  * RecurrenceEngine calculates next occurrence dates based on frequency rules
  */
 export class RecurrenceEngine {

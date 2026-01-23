@@ -1,4 +1,3 @@
-[file content begin]
 import { QuerySyntaxError } from './QueryError';
 import { StatusType } from '@/core/models/Status';
 import type { DateField, DateComparator } from './filters/DateFilter';

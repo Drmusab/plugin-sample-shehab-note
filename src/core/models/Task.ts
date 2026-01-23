@@ -187,6 +187,18 @@ export interface Task {
   
   /** Dependencies on other SiYuan notes/blocks */
   crossNoteDependencies?: CrossNoteDependency[];
+
+  // RRULE Migration Support
+  
+  /** Legacy recurrence data before RRULE migration (for rollback/debug) */
+  legacyRecurrenceSnapshot?: {
+    type: string;
+    interval: number;
+    weekdays?: number[];
+    dayOfMonth?: number;
+    month?: number;
+    migratedAt: string; // ISO timestamp
+  };
 }
 
 /**

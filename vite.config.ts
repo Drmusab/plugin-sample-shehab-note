@@ -36,7 +36,7 @@ export default defineConfig({
       ...(isTest
         ? {
             siyuan: resolve(__dirname, "src/__tests__/siyuan-stub.ts"),
-            rrule: resolve(__dirname, "src/__tests__/rrule-stub.ts"),
+            // Use real rrule library in tests
           }
         : {}),
     },
