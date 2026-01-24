@@ -9,6 +9,7 @@
   import { showToast, toast } from "@/utils/notifications";
   import { isValidFrequency } from "@/core/models/Frequency";
   import { pluginEventBus } from "@/core/events/PluginEventBus";
+  import { evaluateEscalation } from "@/core/escalation/EscalationEvaluator";
   import {
     getTodayAndOverdueTasks,
     removeTask,
@@ -19,6 +20,7 @@
   import type { App } from "siyuan";
   import { setContext } from "svelte";
   import { URGENCY_SETTINGS_CONTEXT_KEY } from "@/core/urgency/UrgencyContext";
+  import { ESCALATION_SETTINGS_CONTEXT_KEY } from "@/core/escalation/EscalationContext";
   import TodayTab from "./tabs/TodayTab.svelte";
   import AllTasksTab from "./tabs/AllTasksTab.svelte";
   import TimelineTab from "./tabs/TimelineTab.svelte";
@@ -30,6 +32,7 @@
   import SearchTab from "./tabs/SearchTab.svelte";
   import DependenciesTab from "./tabs/DependenciesTab.svelte";
   import InsightsTab from "./tabs/InsightsTab.svelte";
+  import EscalationTab from "./tabs/EscalationTab.svelte";
   import TaskEditorModal from "./TaskEditorModal.svelte";
   import Settings from "./settings/Settings.svelte";
   import Icon from "./ui/Icon.svelte";
@@ -47,14 +50,17 @@
 
   let { repository, scheduler, eventService, shortcutManager, settingsService, app, patternLearner }: Props = $props();
 
+  const escalationSettings = $state(settingsService.get().escalation);
+
   setContext(URGENCY_SETTINGS_CONTEXT_KEY, settingsService.get().urgency);
+  setContext(ESCALATION_SETTINGS_CONTEXT_KEY, escalationSettings);
 
   // Get timezone handler and recurrence engine from scheduler
   // These are simple getters, not reactive state - no need for $derived
   const timezoneHandler = scheduler.getTimezoneHandler();
   const recurrenceEngine = scheduler.getRecurrenceEngine();
 
-  type TabType = "inbox" | "today" | "upcoming" | "done" | "projects" | "search" | "all" | "timeline" | "analytics" | "insights" | "dependencies";
+  type TabType = "inbox" | "today" | "upcoming" | "done" | "projects" | "search" | "all" | "timeline" | "analytics" | "insights" | "dependencies" | "escalation";
   let activeTab = $state<TabType>("today");
   let showTaskForm = $state(false);
   let showSettings = $state(false);
@@ -68,7 +74,7 @@
   let todayTasks = $derived(getTodayAndOverdueTasks(allTasks));
   let isRefreshing = $state(false);
   const panelLabelId = $derived(
-    ["inbox", "today", "upcoming", "done", "projects", "search", "all", "insights", "dependencies"].includes(activeTab)
+    ["inbox", "today", "upcoming", "done", "projects", "search", "all", "insights", "dependencies", "escalation"].includes(activeTab)
       ? `dashboard-tab-${activeTab}`
       : undefined
   );
@@ -162,6 +168,13 @@
   const blockedCount = $derived(
     allTasks.filter((t) => isBlocked(t, allTasks)).length
   );
+
+  const escalationCount = $derived(() => {
+    if (!escalationSettings.enabled) {
+      return 0;
+    }
+    return allTasks.filter((task) => evaluateEscalation(task, { settings: escalationSettings }).level > 0).length;
+  });
 
   // Refresh tasks from storage (initial load / explicit reloads only)
   function loadTasksFromStorage(reason: "initial" | "reload" | "external" = "initial") {
@@ -429,7 +442,7 @@
 
 </script>
 
-<div class="dashboard">
+<div class="dashboard {escalationSettings.colorTheme === 'high-contrast' ? 'dashboard--escalation-high-contrast' : ''}">
   <div class="dashboard__header">
     <h1 class="dashboard__title">Recurring Tasks</h1>
     <div class="dashboard__header-actions">
@@ -497,6 +510,21 @@
           <span class="dashboard__tab-badge">{todayTasks.length}</span>
         {/if}
       </button>
+      {#if escalationSettings.enabled}
+        <button
+          id="dashboard-tab-escalation"
+          class="dashboard__tab {activeTab === 'escalation' ? 'active' : ''}"
+          role="tab"
+          aria-selected={activeTab === "escalation"}
+          aria-controls="dashboard-panel"
+          onclick={() => (activeTab = "escalation")}
+        >
+          <Icon category="status" name="warning" size={16} alt="Escalation" /> Escalation
+          {#if escalationCount > 0}
+            <span class="dashboard__tab-badge">{escalationCount}</span>
+          {/if}
+        </button>
+      {/if}
       <button
         id="dashboard-tab-upcoming"
         class="dashboard__tab {activeTab === 'upcoming' ?  'active' : ''}"
@@ -582,7 +610,7 @@
       </button>
     </div>
 
-    {#if activeTab !== "search" && activeTab !== "timeline" && activeTab !== "analytics" && activeTab !== "insights" && activeTab !== "dependencies"}
+    {#if activeTab !== "search" && activeTab !== "timeline" && activeTab !== "analytics" && activeTab !== "insights" && activeTab !== "dependencies" && activeTab !== "escalation"}
       <div class="dashboard__filters">
         <span class="dashboard__filters-label">Quick Filters: </span>
         <button
@@ -651,6 +679,13 @@
           onSkip={handleTaskSkip}
           onEdit={handleEditTask}
           {timezoneHandler}
+        />
+      {:else if activeTab === "escalation"}
+        <EscalationTab
+          tasks={allTasks}
+          {app}
+          settings={escalationSettings}
+          onEdit={handleEditTask}
         />
       {:else if activeTab === "upcoming"}
         <UpcomingTab
@@ -747,6 +782,30 @@
     flex-direction: column;
     height: 100%;
     background:  var(--b3-theme-background);
+    --rt-escalation-warning-bg: rgba(251, 191, 36, 0.16);
+    --rt-escalation-warning-border: rgba(251, 191, 36, 0.45);
+    --rt-escalation-warning-text: var(--b3-theme-on-surface);
+    --rt-escalation-critical-bg: rgba(249, 115, 22, 0.18);
+    --rt-escalation-critical-border: rgba(249, 115, 22, 0.5);
+    --rt-escalation-critical-text: var(--b3-theme-on-surface);
+    --rt-escalation-severe-bg: rgba(239, 68, 68, 0.18);
+    --rt-escalation-severe-border: rgba(239, 68, 68, 0.55);
+    --rt-escalation-severe-text: var(--b3-theme-on-surface);
+    --rt-escalation-on-time-bg: var(--b3-theme-surface-lighter);
+    --rt-escalation-on-time-border: var(--b3-border-color);
+    --rt-escalation-on-time-text: var(--b3-theme-on-surface-light);
+  }
+
+  .dashboard--escalation-high-contrast {
+    --rt-escalation-warning-bg: #fbbf24;
+    --rt-escalation-warning-border: #f59e0b;
+    --rt-escalation-warning-text: #1f2937;
+    --rt-escalation-critical-bg: #f97316;
+    --rt-escalation-critical-border: #ea580c;
+    --rt-escalation-critical-text: #111827;
+    --rt-escalation-severe-bg: #ef4444;
+    --rt-escalation-severe-border: #dc2626;
+    --rt-escalation-severe-text: #ffffff;
   }
 
   .dashboard__header {

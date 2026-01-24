@@ -192,7 +192,10 @@ export class InlineQueryController {
     const taskIndex = {
       getAllTasks: () => this.options.repository.getAllTasks(),
     };
-    const engine = new QueryEngine(taskIndex, { urgencySettings: settings.urgency });
+    const engine = new QueryEngine(taskIndex, {
+      urgencySettings: settings.urgency,
+      escalationSettings: settings.escalation,
+    });
     const globalQuery = GlobalQuery.getInstance();
     if (globalQuery.isEnabled() && globalQuery.getError()) {
       throw new Error(`Global query error: ${globalQuery.getError()}`);

@@ -22,7 +22,7 @@ export interface QueryAST {
 }
 
 export interface FilterNode {
-  type: 'status' | 'date' | 'priority' | 'urgency' | 'tag' | 'path' | 'dependency' | 'recurrence' | 'boolean' | 'done' | 'description' | 'heading' | 'description-regex' | 'path-regex' | 'tag-regex';
+  type: 'status' | 'date' | 'priority' | 'urgency' | 'escalation' | 'tag' | 'path' | 'dependency' | 'recurrence' | 'boolean' | 'done' | 'description' | 'heading' | 'description-regex' | 'path-regex' | 'tag-regex';
   operator: string;
   value: any;
   negate?: boolean;
@@ -243,6 +243,11 @@ export class QueryParser {
     if (line.startsWith('urgency below ')) {
       const value = line.substring('urgency below '.length).trim();
       return { type: 'urgency', operator: 'below', value: this.parseNumericValue(value, 'urgency') };
+    }
+
+    const escalationFilterMatch = this.parseEscalationFilter(line);
+    if (escalationFilterMatch) {
+      return escalationFilterMatch;
     }
 
     // Tag filters
@@ -826,6 +831,11 @@ export class QueryParser {
       return { type: 'urgency', operator: 'below', value: this.parseNumericValue(value, 'urgency') };
     }
 
+    const escalationFilterMatch = this.parseEscalationFilter(trimmed);
+    if (escalationFilterMatch) {
+      return escalationFilterMatch;
+    }
+
     // Tag filters
     if (trimmed.startsWith('tag includes ')) {
       const tag = trimmed.substring('tag includes '.length).trim();
@@ -991,6 +1001,64 @@ export class QueryParser {
     }
     
     return { pattern, flags: '' };
+  }
+
+  private parseEscalationFilter(line: string): FilterNode | null {
+    const normalized = line.trim();
+    if (!normalized.toLowerCase().startsWith("escalation")) {
+      return null;
+    }
+
+    const comparisonMatch = normalized.match(/^escalation\s*(>=|<=|>|<|=)\s*(.+)$/i);
+    if (comparisonMatch) {
+      const operatorMap: Record<string, string> = {
+        ">": "above",
+        "<": "below",
+        ">=": "at-least",
+        "<=": "at-most",
+        "=": "is",
+      };
+      const operator = operatorMap[comparisonMatch[1]] ?? "is";
+      const level = this.parseEscalationLevel(comparisonMatch[2]);
+      return { type: "escalation", operator, value: level };
+    }
+
+    const namedMatch = normalized.match(/^escalation\s+(is|above|below|at\s+least|at\s+most)\s+(.+)$/i);
+    if (namedMatch) {
+      const rawOperator = namedMatch[1].toLowerCase();
+      const operator =
+        rawOperator === "at least"
+          ? "at-least"
+          : rawOperator === "at most"
+          ? "at-most"
+          : rawOperator;
+      const level = this.parseEscalationLevel(namedMatch[2]);
+      return { type: "escalation", operator, value: level };
+    }
+
+    return null;
+  }
+
+  private parseEscalationLevel(value: string): number {
+    const normalized = value.trim().toLowerCase().replace(/\s+/g, "-");
+    switch (normalized) {
+      case "on-time":
+      case "ontime":
+        return 0;
+      case "warning":
+        return 1;
+      case "critical":
+        return 2;
+      case "severe":
+        return 3;
+      default:
+        throw new QuerySyntaxError(
+          `Invalid escalation level: "${value}"`,
+          this.line,
+          this.column,
+          'Valid levels: on-time, warning, critical, severe'
+        );
+    }
   }
 
 }

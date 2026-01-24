@@ -10,6 +10,8 @@
   import type { UrgencySettings } from "@/core/urgency/UrgencySettings";
   import { getContext } from "svelte";
   import { URGENCY_SETTINGS_CONTEXT_KEY } from "@/core/urgency/UrgencyContext";
+  import { ESCALATION_SETTINGS_CONTEXT_KEY } from "@/core/escalation/EscalationContext";
+  import type { EscalationSettings } from "@/core/settings/PluginSettings";
 
   interface Props {
     tasks: Task[];
@@ -44,6 +46,7 @@
     "sort by priority",
     "sort by urgency",
     "urgency above 80",
+    "escalation >= critical",
     "group by priority",
   ];
 
@@ -53,7 +56,8 @@
   };
 
   const urgencySettings = getContext<UrgencySettings | undefined>(URGENCY_SETTINGS_CONTEXT_KEY);
-  const queryEngine = new QueryEngine(taskIndex, { urgencySettings });
+  const escalationSettings = getContext<EscalationSettings | undefined>(ESCALATION_SETTINGS_CONTEXT_KEY);
+  const queryEngine = new QueryEngine(taskIndex, { urgencySettings, escalationSettings });
   const queryComposer = new QueryComposer(new QueryParser());
   const dependencyGraph = new DependencyGraph();
 

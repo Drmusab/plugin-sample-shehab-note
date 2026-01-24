@@ -56,6 +56,27 @@ export interface DependencyGraphSettings {
   cycleHandlingMode: 'strict' | 'warn';
 }
 
+export interface EscalationThreshold {
+  minDays: number;
+  maxDays?: number;
+}
+
+export interface EscalationSettings {
+  enabled: boolean;
+  includeScheduled: boolean;
+  thresholds: {
+    warning: EscalationThreshold;
+    critical: EscalationThreshold;
+    severe: EscalationThreshold;
+  };
+  badgeVisibility: {
+    dashboard: boolean;
+    taskList: boolean;
+    timeline: boolean;
+  };
+  colorTheme: 'auto' | 'high-contrast';
+}
+
 /**
  * Complete plugin settings
  */
@@ -83,6 +104,9 @@ export interface PluginSettings {
 
   /** Urgency scoring configuration */
   urgency: UrgencySettings;
+
+  /** Escalation dashboard configuration */
+  escalation: EscalationSettings;
   
   /** Display timezone for date rendering */
   displayTimezone?: string;
@@ -216,6 +240,22 @@ export interface BlockActionSettings {
 /**
  * Default settings
  */
+export const DEFAULT_ESCALATION_SETTINGS: EscalationSettings = {
+  enabled: true,
+  includeScheduled: true,
+  thresholds: {
+    warning: { minDays: 1, maxDays: 2 },
+    critical: { minDays: 3, maxDays: 7 },
+    severe: { minDays: 8 },
+  },
+  badgeVisibility: {
+    dashboard: true,
+    taskList: true,
+    timeline: false,
+  },
+  colorTheme: 'auto',
+};
+
 export const DEFAULT_SETTINGS: PluginSettings = {
   dates: {
     autoAddCreated: false,
@@ -246,6 +286,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   globalFilter: DEFAULT_GLOBAL_FILTER_CONFIG,
   globalQuery: DEFAULT_GLOBAL_QUERY_CONFIG,
   urgency: DEFAULT_URGENCY_SETTINGS,
+  escalation: DEFAULT_ESCALATION_SETTINGS,
   smartRecurrence: {
     enabled: false,
     autoAdjust: false,
@@ -371,6 +412,28 @@ export function mergeSettings(userSettings: Partial<PluginSettings>): PluginSett
     urgency: {
       ...DEFAULT_SETTINGS.urgency,
       ...userSettings.urgency,
+    },
+    escalation: {
+      ...DEFAULT_SETTINGS.escalation,
+      ...userSettings.escalation,
+      thresholds: {
+        warning: {
+          ...DEFAULT_SETTINGS.escalation.thresholds.warning,
+          ...userSettings.escalation?.thresholds?.warning,
+        },
+        critical: {
+          ...DEFAULT_SETTINGS.escalation.thresholds.critical,
+          ...userSettings.escalation?.thresholds?.critical,
+        },
+        severe: {
+          ...DEFAULT_SETTINGS.escalation.thresholds.severe,
+          ...userSettings.escalation?.thresholds?.severe,
+        },
+      },
+      badgeVisibility: {
+        ...DEFAULT_SETTINGS.escalation.badgeVisibility,
+        ...userSettings.escalation?.badgeVisibility,
+      },
     },
     smartRecurrence: {
       ...DEFAULT_SETTINGS.smartRecurrence,

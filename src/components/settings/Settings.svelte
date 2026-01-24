@@ -10,6 +10,7 @@
   import type { ShortcutManager, ShortcutDisplay } from "@/commands/ShortcutManager";
   import GlobalFilterSettings from './GlobalFilterSettings.svelte';
   import StatusRegistryEditor from './StatusRegistryEditor.svelte';
+  import EscalationSettings from './EscalationSettings.svelte';
 
   interface Props {
     eventService: EventService;
@@ -25,7 +26,7 @@
   let config = $state<NotificationConfig>(DEFAULT_NOTIFICATION_CONFIG);
   let testingChannel: string | null = $state(null);
   let testResults = $state<{ [key: string]: { success: boolean; message: string } }>({});
-  let activeSection = $state<'general' | 'filter' | 'statuses' | 'shortcuts' | 'inlineTasks' | 'blockActions'>('general');
+  let activeSection = $state<'general' | 'filter' | 'statuses' | 'shortcuts' | 'inlineTasks' | 'blockActions' | 'escalation'>('general');
   let shortcutList = $state<ShortcutDisplay[]>([]);
   let shortcutDrafts = $state<Record<string, string>>({});
   let inlineTaskSettings = $state<InlineTaskSettings>({
@@ -246,6 +247,12 @@
         Global Filtering & Query
       </button>
       <button 
+        class="settings__nav-btn {activeSection === 'escalation' ? 'active' : ''}"
+        onclick={() => activeSection = 'escalation'}
+      >
+        Escalation
+      </button>
+      <button 
         class="settings__nav-btn {activeSection === 'statuses' ? 'active' : ''}"
         onclick={() => activeSection = 'statuses'}
       >
@@ -454,6 +461,8 @@
         </section>
       {:else if activeSection === 'filter'}
         <GlobalFilterSettings {settingsService} {repository} />
+      {:else if activeSection === 'escalation'}
+        <EscalationSettings {settingsService} />
       {:else if activeSection === 'statuses'}
         <StatusRegistryEditor />
       {:else if activeSection === 'shortcuts'}

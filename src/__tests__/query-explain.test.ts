@@ -166,6 +166,18 @@ describe("Query Explain Mode", () => {
       expect(result.explanation).toContain("Urgency");
     });
 
+    it("should generate explanation for escalation filter", () => {
+      const taskIndex = new MockTaskIndex();
+      const engine = new QueryEngine(taskIndex);
+      const parser = new QueryParser();
+
+      const ast = parser.parse("escalation >= critical\nexplain");
+      const result = engine.execute(ast);
+
+      expect(result.explanation).toBeDefined();
+      expect(result.explanation).toContain("Escalation");
+    });
+
     it("should generate explanation for path filter", () => {
       const taskIndex = new MockTaskIndex();
       const engine = new QueryEngine(taskIndex);

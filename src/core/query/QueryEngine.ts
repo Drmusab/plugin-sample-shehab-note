@@ -24,6 +24,7 @@ import { AndFilter, OrFilter, NotFilter } from './filters/BooleanFilter';
 import { DescriptionFilter } from './filters/DescriptionFilter';
 import { HeadingFilter } from './filters/HeadingFilter';
 import { UrgencyFilter, type UrgencyComparator } from './filters/UrgencyFilter';
+import { EscalationFilter, type EscalationComparator } from './filters/EscalationFilter';
 import { DescriptionRegexFilter } from './filters/DescriptionRegexFilter';
 import { PathRegexFilter } from './filters/PathRegexFilter';
 import { TagRegexFilter } from './filters/TagRegexFilter';
@@ -33,6 +34,8 @@ import { StatusTypeGrouper, StatusNameGrouper } from './groupers/StatusGrouper';
 import { PriorityGrouper } from './groupers/PriorityGrouper';
 import { FolderGrouper, PathGrouper, TagGrouper } from './groupers/PathGrouper';
 import { explainQuery } from './QueryExplain';
+import type { EscalationSettings } from '@/core/settings/PluginSettings';
+import { DEFAULT_ESCALATION_SETTINGS } from '@/core/settings/PluginSettings';
 
 /**
  * Execute queries against task index
@@ -55,12 +58,14 @@ export class QueryEngine {
   private dependencyGraph: DependencyGraph | null = null;
   private globalFilterAST: QueryAST | null = null;
   private urgencySettings: UrgencySettings;
+  private escalationSettings: EscalationSettings;
 
   constructor(
     private taskIndex: TaskIndex,
-    options: { urgencySettings?: UrgencySettings } = {}
+    options: { urgencySettings?: UrgencySettings; escalationSettings?: EscalationSettings } = {}
   ) {
     this.urgencySettings = options.urgencySettings ?? DEFAULT_URGENCY_SETTINGS;
+    this.escalationSettings = options.escalationSettings ?? DEFAULT_ESCALATION_SETTINGS;
   }
 
   /**
@@ -238,6 +243,14 @@ export class QueryEngine {
           node.value as number,
           referenceDate,
           this.urgencySettings
+        );
+
+      case 'escalation':
+        return new EscalationFilter(
+          node.operator as EscalationComparator,
+          node.value as number,
+          referenceDate,
+          this.escalationSettings
         );
 
       case 'tag':

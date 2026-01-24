@@ -204,6 +204,38 @@ describe('Enhanced Query Language Filters', () => {
     });
   });
 
+  describe('EscalationFilter', () => {
+    it('should filter tasks by escalation level thresholds', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-01-10T09:00:00Z'));
+
+      const parser = new QueryParser();
+      const ast = parser.parse('escalation >= critical');
+      const escalationTasks: Task[] = [
+        {
+          ...createTask('Warning Task', { type: 'daily', interval: 1 }),
+          dueAt: new Date('2024-01-08T09:00:00Z').toISOString(),
+        },
+        {
+          ...createTask('Critical Task', { type: 'daily', interval: 1 }),
+          dueAt: new Date('2024-01-03T09:00:00Z').toISOString(),
+        },
+        {
+          ...createTask('Severe Task', { type: 'daily', interval: 1 }),
+          dueAt: new Date('2023-12-31T09:00:00Z').toISOString(),
+        },
+      ];
+      const engine = new QueryEngine({ getAllTasks: () => escalationTasks });
+      const result = engine.execute(ast);
+
+      expect(result.tasks.length).toBe(2);
+      expect(result.tasks.some((task) => task.name === 'Critical Task')).toBe(true);
+      expect(result.tasks.some((task) => task.name === 'Severe Task')).toBe(true);
+
+      vi.useRealTimers();
+    });
+  });
+
   describe('Boolean operators', () => {
     it('should support AND operator', () => {
       const parser = new QueryParser();

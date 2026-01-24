@@ -8,7 +8,11 @@
   import { daysBetween, formatDateTime, isOverdue, isToday } from "@/utils/date";
   import { PRIORITY_COLORS, SNOOZE_OPTIONS } from "@/utils/constants";
   import { URGENCY_SETTINGS_CONTEXT_KEY } from "@/core/urgency/UrgencyContext";
+  import { ESCALATION_SETTINGS_CONTEXT_KEY } from "@/core/escalation/EscalationContext";
+  import type { EscalationSettings } from "@/core/settings/PluginSettings";
+  import { buildEscalationExplanation, evaluateEscalation } from "@/core/escalation/EscalationEvaluator";
   import Icon from "@/components/ui/Icon.svelte";
+  import EscalationBadge from "@/components/ui/EscalationBadge.svelte";
 
   interface Props {
     task: Task;
@@ -68,6 +72,15 @@
 
   const urgencySettings = getContext<UrgencySettings | undefined>(URGENCY_SETTINGS_CONTEXT_KEY);
   const urgencyScore = $derived(calculateUrgencyScore(task, { settings: urgencySettings }));
+
+  const escalationSettings = getContext<EscalationSettings | undefined>(ESCALATION_SETTINGS_CONTEXT_KEY);
+  const escalationResult = $derived(() => evaluateEscalation(task, { settings: escalationSettings }));
+  const escalationExplanation = $derived(() =>
+    buildEscalationExplanation(task, escalationResult, { settings: escalationSettings })
+  );
+  const showEscalationBadge = $derived(
+    () => escalationSettings?.badgeVisibility?.taskList && escalationResult.level > 0
+  );
 
   let showSnoozeMenu = $state(false);
   let firstSnoozeOption:  HTMLButtonElement | null = $state(null);
@@ -271,6 +284,12 @@
       <span class="task-card__label">Urgency:</span>
       <span class="task-card__value">{urgencyScore}</span>
     </div>
+    {#if showEscalationBadge}
+      <div class="task-card__escalation">
+        <span class="task-card__label">Escalation:</span>
+        <EscalationBadge result={escalationResult} explanation={escalationExplanation} compact={true} />
+      </div>
+    {/if}
 
     {#if task.lastCompletedAt}
       <div class="task-card__last-completed">
@@ -490,7 +509,8 @@
 
   .task-card__due,
   .task-card__last-completed,
-  .task-card__urgency {
+  .task-card__urgency,
+  .task-card__escalation {
     margin-bottom: 6px;
   }
 

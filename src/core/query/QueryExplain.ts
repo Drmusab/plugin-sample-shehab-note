@@ -30,6 +30,10 @@ export function explainQuery(query: QueryAST): string {
 
 export function explainFilter(filter: FilterNode): string {
   const negate = filter.negate ? 'NOT ' : '';
+  const escalationLabel =
+    typeof filter.value === "number"
+      ? { 0: "on-time", 1: "warning", 2: "critical", 3: "severe" }[filter.value] ?? filter.value
+      : filter.value;
 
   switch (filter.type) {
     case 'status':
@@ -43,6 +47,9 @@ export function explainFilter(filter: FilterNode): string {
 
     case 'urgency':
       return `${negate}Urgency ${filter.operator} ${filter.value}`;
+
+    case 'escalation':
+      return `${negate}Escalation ${filter.operator} ${escalationLabel}`;
 
     case 'tag':
       if (filter.operator === 'includes') {
