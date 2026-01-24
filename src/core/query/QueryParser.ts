@@ -22,7 +22,7 @@ export interface QueryAST {
 }
 
 export interface FilterNode {
-  type: 'status' | 'date' | 'priority' | 'urgency' | 'escalation' | 'tag' | 'path' | 'dependency' | 'recurrence' | 'boolean' | 'done' | 'description' | 'heading' | 'description-regex' | 'path-regex' | 'tag-regex';
+  type: 'status' | 'date' | 'priority' | 'urgency' | 'escalation' | 'attention' | 'attention-lane' | 'tag' | 'path' | 'dependency' | 'recurrence' | 'boolean' | 'done' | 'description' | 'heading' | 'description-regex' | 'path-regex' | 'tag-regex';
   operator: string;
   value: any;
   negate?: boolean;
@@ -217,18 +217,9 @@ export class QueryParser {
       return dateFilterMatch;
     }
 
-    // Priority filters
-    if (line.startsWith('priority is ')) {
-      const level = line.substring('priority is '.length).trim();
-      return { type: 'priority', operator: 'is', value: level as PriorityLevel };
-    }
-    if (line.startsWith('priority above ')) {
-      const level = line.substring('priority above '.length).trim();
-      return { type: 'priority', operator: 'above', value: level as PriorityLevel };
-    }
-    if (line.startsWith('priority below ')) {
-      const level = line.substring('priority below '.length).trim();
-      return { type: 'priority', operator: 'below', value: level as PriorityLevel };
+    const priorityFilter = this.parsePriorityFilter(line);
+    if (priorityFilter) {
+      return priorityFilter;
     }
 
     // Urgency filters
@@ -248,6 +239,16 @@ export class QueryParser {
     const escalationFilterMatch = this.parseEscalationFilter(line);
     if (escalationFilterMatch) {
       return escalationFilterMatch;
+    }
+
+    const attentionFilterMatch = this.parseAttentionFilter(line);
+    if (attentionFilterMatch) {
+      return attentionFilterMatch;
+    }
+
+    const laneFilterMatch = this.parseAttentionLaneFilter(line);
+    if (laneFilterMatch) {
+      return laneFilterMatch;
     }
 
     // Tag filters
@@ -803,18 +804,9 @@ export class QueryParser {
       return dateFilterMatch;
     }
 
-    // Priority filters
-    if (trimmed.startsWith('priority is ')) {
-      const level = trimmed.substring('priority is '.length).trim();
-      return { type: 'priority', operator: 'is', value: level as PriorityLevel };
-    }
-    if (trimmed.startsWith('priority above ')) {
-      const level = trimmed.substring('priority above '.length).trim();
-      return { type: 'priority', operator: 'above', value: level as PriorityLevel };
-    }
-    if (trimmed.startsWith('priority below ')) {
-      const level = trimmed.substring('priority below '.length).trim();
-      return { type: 'priority', operator: 'below', value: level as PriorityLevel };
+    const priorityFilter = this.parsePriorityFilter(trimmed);
+    if (priorityFilter) {
+      return priorityFilter;
     }
 
     // Urgency filters
@@ -834,6 +826,16 @@ export class QueryParser {
     const escalationFilterMatch = this.parseEscalationFilter(trimmed);
     if (escalationFilterMatch) {
       return escalationFilterMatch;
+    }
+
+    const attentionFilterMatch = this.parseAttentionFilter(trimmed);
+    if (attentionFilterMatch) {
+      return attentionFilterMatch;
+    }
+
+    const laneFilterMatch = this.parseAttentionLaneFilter(trimmed);
+    if (laneFilterMatch) {
+      return laneFilterMatch;
     }
 
     // Tag filters
@@ -1037,6 +1039,93 @@ export class QueryParser {
     }
 
     return null;
+  }
+
+  private parsePriorityFilter(line: string): FilterNode | null {
+    const normalized = line.trim();
+    if (!normalized.toLowerCase().startsWith("priority")) {
+      return null;
+    }
+
+    const comparisonMatch = normalized.match(/^priority\s*(>=|<=|>|<|=)\s*(.+)$/i);
+    if (comparisonMatch) {
+      const operatorMap: Record<string, string> = {
+        ">": "above",
+        "<": "below",
+        ">=": "at-least",
+        "<=": "at-most",
+        "=": "is",
+      };
+      const operator = operatorMap[comparisonMatch[1]] ?? "is";
+      return { type: "priority", operator, value: this.unquote(comparisonMatch[2].trim()) as PriorityLevel };
+    }
+
+    const namedMatch = normalized.match(/^priority\s+(is|above|below|at\s+least|at\s+most)\s+(.+)$/i);
+    if (namedMatch) {
+      const rawOperator = namedMatch[1].toLowerCase();
+      const operator =
+        rawOperator === "at least"
+          ? "at-least"
+          : rawOperator === "at most"
+          ? "at-most"
+          : rawOperator;
+      return { type: "priority", operator, value: this.unquote(namedMatch[2].trim()) as PriorityLevel };
+    }
+
+    return null;
+  }
+
+  private parseAttentionFilter(line: string): FilterNode | null {
+    const normalized = line.trim();
+    if (!normalized.toLowerCase().startsWith("attention")) {
+      return null;
+    }
+
+    const comparisonMatch = normalized.match(/^attention\s*(>=|<=|>|<|=)\s*(\d+)$/i);
+    if (comparisonMatch) {
+      const operatorMap: Record<string, string> = {
+        ">": "above",
+        "<": "below",
+        ">=": "at-least",
+        "<=": "at-most",
+        "=": "is",
+      };
+      const operator = operatorMap[comparisonMatch[1]] ?? "is";
+      return { type: "attention", operator, value: this.parseNumericValue(comparisonMatch[2], "attention") };
+    }
+
+    const namedMatch = normalized.match(/^attention\s+(is|above|below|at\s+least|at\s+most)\s+(\d+)$/i);
+    if (namedMatch) {
+      const rawOperator = namedMatch[1].toLowerCase();
+      const operator =
+        rawOperator === "at least"
+          ? "at-least"
+          : rawOperator === "at most"
+          ? "at-most"
+          : rawOperator;
+      return { type: "attention", operator, value: this.parseNumericValue(namedMatch[2], "attention") };
+    }
+
+    return null;
+  }
+
+  private parseAttentionLaneFilter(line: string): FilterNode | null {
+    const normalized = line.trim();
+    const match = normalized.match(/^lane\s+is\s+(.+)$/i);
+    if (!match) {
+      return null;
+    }
+    const lane = match[1].trim().toUpperCase().replace(/\s+/g, "_");
+    const allowed = new Set(["DO_NOW", "UNBLOCK_FIRST", "BLOCKED", "WATCHLIST"]);
+    if (!allowed.has(lane)) {
+      throw new QuerySyntaxError(
+        `Invalid lane value: "${match[1].trim()}"`,
+        this.line,
+        this.column,
+        "Valid lanes: DO_NOW, UNBLOCK_FIRST, BLOCKED, WATCHLIST"
+      );
+    }
+    return { type: "attention-lane", operator: "is", value: lane };
   }
 
   private parseEscalationLevel(value: string): number {

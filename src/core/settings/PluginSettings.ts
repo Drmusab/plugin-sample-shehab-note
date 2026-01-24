@@ -77,6 +77,29 @@ export interface EscalationSettings {
   colorTheme: 'auto' | 'high-contrast';
 }
 
+export interface AttentionSettings {
+  enabled: boolean;
+  hideCompleted: boolean;
+  treatScheduledAsWatchlist: boolean;
+  blockersPreviewCount: number;
+  scoring: {
+    weights: {
+      escalation: number;
+      priority: number;
+      blocking: number;
+    };
+    overduePerDay: number;
+    overdueMaxBoost: number;
+    blockingPerTask: number;
+    blockingMax: number;
+  };
+  lanes: {
+    doNowThreshold: number;
+    watchlistThreshold: number;
+    unblockCountThreshold: number;
+  };
+}
+
 /**
  * Complete plugin settings
  */
@@ -107,6 +130,9 @@ export interface PluginSettings {
 
   /** Escalation dashboard configuration */
   escalation: EscalationSettings;
+
+  /** Attention engine configuration */
+  attention: AttentionSettings;
   
   /** Display timezone for date rendering */
   displayTimezone?: string;
@@ -256,6 +282,29 @@ export const DEFAULT_ESCALATION_SETTINGS: EscalationSettings = {
   colorTheme: 'auto',
 };
 
+export const DEFAULT_ATTENTION_SETTINGS: AttentionSettings = {
+  enabled: true,
+  hideCompleted: true,
+  treatScheduledAsWatchlist: true,
+  blockersPreviewCount: 3,
+  scoring: {
+    weights: {
+      escalation: 1,
+      priority: 1,
+      blocking: 1,
+    },
+    overduePerDay: 2,
+    overdueMaxBoost: 20,
+    blockingPerTask: 5,
+    blockingMax: 20,
+  },
+  lanes: {
+    doNowThreshold: 60,
+    watchlistThreshold: 30,
+    unblockCountThreshold: 2,
+  },
+};
+
 export const DEFAULT_SETTINGS: PluginSettings = {
   dates: {
     autoAddCreated: false,
@@ -287,6 +336,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   globalQuery: DEFAULT_GLOBAL_QUERY_CONFIG,
   urgency: DEFAULT_URGENCY_SETTINGS,
   escalation: DEFAULT_ESCALATION_SETTINGS,
+  attention: DEFAULT_ATTENTION_SETTINGS,
   smartRecurrence: {
     enabled: false,
     autoAdjust: false,
@@ -433,6 +483,22 @@ export function mergeSettings(userSettings: Partial<PluginSettings>): PluginSett
       badgeVisibility: {
         ...DEFAULT_SETTINGS.escalation.badgeVisibility,
         ...userSettings.escalation?.badgeVisibility,
+      },
+    },
+    attention: {
+      ...DEFAULT_SETTINGS.attention,
+      ...userSettings.attention,
+      scoring: {
+        ...DEFAULT_SETTINGS.attention.scoring,
+        ...userSettings.attention?.scoring,
+        weights: {
+          ...DEFAULT_SETTINGS.attention.scoring.weights,
+          ...userSettings.attention?.scoring?.weights,
+        },
+      },
+      lanes: {
+        ...DEFAULT_SETTINGS.attention.lanes,
+        ...userSettings.attention?.lanes,
       },
     },
     smartRecurrence: {

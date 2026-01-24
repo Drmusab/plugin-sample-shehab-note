@@ -35,7 +35,7 @@ function normalizeLevel(level: PriorityLevel): TaskPriority {
 
 export class PriorityFilter extends Filter {
   constructor(
-    private operator: 'is' | 'above' | 'below',
+    private operator: 'is' | 'above' | 'below' | 'at-least' | 'at-most',
     private level: PriorityLevel
   ) {
     super();
@@ -53,6 +53,10 @@ export class PriorityFilter extends Filter {
         return taskWeight > targetWeight;
       case 'below':
         return taskWeight < targetWeight;
+      case 'at-least':
+        return taskWeight >= targetWeight;
+      case 'at-most':
+        return taskWeight <= targetWeight;
       default:
         return false;
     }

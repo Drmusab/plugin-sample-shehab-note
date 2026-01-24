@@ -29,6 +29,7 @@ export { DescriptionRegexFilter } from './filters/DescriptionRegexFilter';
 export { PathRegexFilter } from './filters/PathRegexFilter';
 export { TagRegexFilter } from './filters/TagRegexFilter';
 export { EscalationFilter } from './filters/EscalationFilter';
+export { AttentionScoreFilter, AttentionLaneFilter } from './filters/AttentionFilter';
 
 // Utils
 export { RegexMatcher, type RegexSpec } from './utils/RegexMatcher';

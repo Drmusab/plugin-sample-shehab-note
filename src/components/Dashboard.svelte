@@ -33,6 +33,7 @@
   import DependenciesTab from "./tabs/DependenciesTab.svelte";
   import InsightsTab from "./tabs/InsightsTab.svelte";
   import EscalationTab from "./tabs/EscalationTab.svelte";
+  import AttentionTab from "./tabs/AttentionTab.svelte";
   import TaskEditorModal from "./TaskEditorModal.svelte";
   import Settings from "./settings/Settings.svelte";
   import Icon from "./ui/Icon.svelte";
@@ -51,6 +52,7 @@
   let { repository, scheduler, eventService, shortcutManager, settingsService, app, patternLearner }: Props = $props();
 
   const escalationSettings = $state(settingsService.get().escalation);
+  const attentionSettings = $state(settingsService.get().attention);
 
   setContext(URGENCY_SETTINGS_CONTEXT_KEY, settingsService.get().urgency);
   setContext(ESCALATION_SETTINGS_CONTEXT_KEY, escalationSettings);
@@ -60,7 +62,7 @@
   const timezoneHandler = scheduler.getTimezoneHandler();
   const recurrenceEngine = scheduler.getRecurrenceEngine();
 
-  type TabType = "inbox" | "today" | "upcoming" | "done" | "projects" | "search" | "all" | "timeline" | "analytics" | "insights" | "dependencies" | "escalation";
+  type TabType = "inbox" | "today" | "attention" | "upcoming" | "done" | "projects" | "search" | "all" | "timeline" | "analytics" | "insights" | "dependencies" | "escalation";
   let activeTab = $state<TabType>("today");
   let showTaskForm = $state(false);
   let showSettings = $state(false);
@@ -74,7 +76,7 @@
   let todayTasks = $derived(getTodayAndOverdueTasks(allTasks));
   let isRefreshing = $state(false);
   const panelLabelId = $derived(
-    ["inbox", "today", "upcoming", "done", "projects", "search", "all", "insights", "dependencies", "escalation"].includes(activeTab)
+    ["inbox", "today", "attention", "upcoming", "done", "projects", "search", "all", "insights", "dependencies", "escalation"].includes(activeTab)
       ? `dashboard-tab-${activeTab}`
       : undefined
   );
@@ -525,6 +527,18 @@
           {/if}
         </button>
       {/if}
+      {#if attentionSettings.enabled}
+        <button
+          id="dashboard-tab-attention"
+          class="dashboard__tab {activeTab === 'attention' ? 'active' : ''}"
+          role="tab"
+          aria-selected={activeTab === "attention"}
+          aria-controls="dashboard-panel"
+          onclick={() => (activeTab = "attention")}
+        >
+          <Icon category="navigation" name="list" size={16} alt="Attention" /> Attention
+        </button>
+      {/if}
       <button
         id="dashboard-tab-upcoming"
         class="dashboard__tab {activeTab === 'upcoming' ?  'active' : ''}"
@@ -685,6 +699,14 @@
           tasks={allTasks}
           {app}
           settings={escalationSettings}
+          onEdit={handleEditTask}
+        />
+      {:else if activeTab === "attention"}
+        <AttentionTab
+          tasks={allTasks}
+          {app}
+          settings={attentionSettings}
+          escalationSettings={escalationSettings}
           onEdit={handleEditTask}
         />
       {:else if activeTab === "upcoming"}

@@ -11,6 +11,7 @@
   import GlobalFilterSettings from './GlobalFilterSettings.svelte';
   import StatusRegistryEditor from './StatusRegistryEditor.svelte';
   import EscalationSettings from './EscalationSettings.svelte';
+  import AttentionSettings from './AttentionSettings.svelte';
 
   interface Props {
     eventService: EventService;
@@ -26,7 +27,7 @@
   let config = $state<NotificationConfig>(DEFAULT_NOTIFICATION_CONFIG);
   let testingChannel: string | null = $state(null);
   let testResults = $state<{ [key: string]: { success: boolean; message: string } }>({});
-  let activeSection = $state<'general' | 'filter' | 'statuses' | 'shortcuts' | 'inlineTasks' | 'blockActions' | 'escalation'>('general');
+  let activeSection = $state<'general' | 'filter' | 'statuses' | 'shortcuts' | 'inlineTasks' | 'blockActions' | 'escalation' | 'attention'>('general');
   let shortcutList = $state<ShortcutDisplay[]>([]);
   let shortcutDrafts = $state<Record<string, string>>({});
   let inlineTaskSettings = $state<InlineTaskSettings>({
@@ -253,6 +254,12 @@
         Escalation
       </button>
       <button 
+        class="settings__nav-btn {activeSection === 'attention' ? 'active' : ''}"
+        onclick={() => activeSection = 'attention'}
+      >
+        Attention Engine
+      </button>
+      <button 
         class="settings__nav-btn {activeSection === 'statuses' ? 'active' : ''}"
         onclick={() => activeSection = 'statuses'}
       >
@@ -463,6 +470,8 @@
         <GlobalFilterSettings {settingsService} {repository} />
       {:else if activeSection === 'escalation'}
         <EscalationSettings {settingsService} />
+      {:else if activeSection === 'attention'}
+        <AttentionSettings {settingsService} />
       {:else if activeSection === 'statuses'}
         <StatusRegistryEditor />
       {:else if activeSection === 'shortcuts'}

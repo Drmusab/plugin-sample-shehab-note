@@ -28,14 +28,17 @@ import { EscalationFilter, type EscalationComparator } from './filters/Escalatio
 import { DescriptionRegexFilter } from './filters/DescriptionRegexFilter';
 import { PathRegexFilter } from './filters/PathRegexFilter';
 import { TagRegexFilter } from './filters/TagRegexFilter';
+import { AttentionLaneFilter, AttentionScoreFilter, type AttentionComparator, type AttentionProfileProvider } from './filters/AttentionFilter';
 import { Grouper } from './groupers/GrouperBase';
 import { DueDateGrouper, ScheduledDateGrouper } from './groupers/DateGrouper';
 import { StatusTypeGrouper, StatusNameGrouper } from './groupers/StatusGrouper';
 import { PriorityGrouper } from './groupers/PriorityGrouper';
 import { FolderGrouper, PathGrouper, TagGrouper } from './groupers/PathGrouper';
 import { explainQuery } from './QueryExplain';
-import type { EscalationSettings } from '@/core/settings/PluginSettings';
-import { DEFAULT_ESCALATION_SETTINGS } from '@/core/settings/PluginSettings';
+import type { AttentionSettings, EscalationSettings } from '@/core/settings/PluginSettings';
+import { DEFAULT_ATTENTION_SETTINGS, DEFAULT_ESCALATION_SETTINGS } from '@/core/settings/PluginSettings';
+import { AttentionEngine, type AttentionLane } from '@/core/attention/AttentionEngine';
+import { buildAttentionQueryFields } from '@/core/attention/AttentionQueryFields';
 
 /**
  * Execute queries against task index
@@ -59,13 +62,16 @@ export class QueryEngine {
   private globalFilterAST: QueryAST | null = null;
   private urgencySettings: UrgencySettings;
   private escalationSettings: EscalationSettings;
+  private attentionSettings: AttentionSettings;
+  private attentionEngine = new AttentionEngine();
 
   constructor(
     private taskIndex: TaskIndex,
-    options: { urgencySettings?: UrgencySettings; escalationSettings?: EscalationSettings } = {}
+    options: { urgencySettings?: UrgencySettings; escalationSettings?: EscalationSettings; attentionSettings?: AttentionSettings } = {}
   ) {
     this.urgencySettings = options.urgencySettings ?? DEFAULT_URGENCY_SETTINGS;
     this.escalationSettings = options.escalationSettings ?? DEFAULT_ESCALATION_SETTINGS;
+    this.attentionSettings = options.attentionSettings ?? DEFAULT_ATTENTION_SETTINGS;
   }
 
   /**
@@ -109,14 +115,25 @@ export class QueryEngine {
       let tasks = this.taskIndex.getAllTasks();
       const totalCount = tasks.length;
 
+      const attentionFields = buildAttentionQueryFields(
+        this.attentionEngine,
+        tasks,
+        this.attentionSettings,
+        this.escalationSettings,
+        referenceDate
+      );
+      const attentionProfileProvider: AttentionProfileProvider = {
+        getProfile: (taskId: string) => attentionFields.getProfile(taskId),
+      };
+
       // Apply global filter first if configured
       if (this.globalFilterAST && this.globalFilterAST.filters.length > 0) {
-        tasks = this.applyFilters(tasks, this.globalFilterAST.filters, referenceDate);
+        tasks = this.applyFilters(tasks, this.globalFilterAST.filters, referenceDate, attentionProfileProvider);
       }
 
       // Apply query filters
       if (query.filters.length > 0) {
-        tasks = this.applyFilters(tasks, query.filters, referenceDate);
+        tasks = this.applyFilters(tasks, query.filters, referenceDate, attentionProfileProvider);
       }
 
       // Apply sorting
@@ -184,11 +201,16 @@ export class QueryEngine {
   /**
    * Apply filters to task list (chainable)
    */
-  private applyFilters(tasks: Task[], filters: FilterNode[], referenceDate: Date): Task[] {
+  private applyFilters(
+    tasks: Task[],
+    filters: FilterNode[],
+    referenceDate: Date,
+    attentionProfileProvider: AttentionProfileProvider
+  ): Task[] {
     let result = tasks;
 
     for (const filterNode of filters) {
-      const filter = this.createFilter(filterNode, referenceDate);
+      const filter = this.createFilter(filterNode, referenceDate, attentionProfileProvider);
       result = result.filter(task => filter.matches(task));
     }
 
@@ -198,7 +220,11 @@ export class QueryEngine {
   /**
    * Create a filter from a filter node
    */
-  private createFilter(node: FilterNode, referenceDate: Date): Filter {
+  private createFilter(
+    node: FilterNode,
+    referenceDate: Date,
+    attentionProfileProvider: AttentionProfileProvider
+  ): Filter {
     switch (node.type) {
       case 'done':
         return node.value ? new DoneFilter() : new NotDoneFilter();
@@ -233,7 +259,7 @@ export class QueryEngine {
 
       case 'priority':
         return new PriorityFilter(
-          node.operator as 'is' | 'above' | 'below',
+          node.operator as 'is' | 'above' | 'below' | 'at-least' | 'at-most',
           node.value as PriorityLevel
         );
 
@@ -252,6 +278,16 @@ export class QueryEngine {
           referenceDate,
           this.escalationSettings
         );
+
+      case 'attention':
+        return new AttentionScoreFilter(
+          node.operator as AttentionComparator,
+          node.value as number,
+          attentionProfileProvider
+        );
+
+      case 'attention-lane':
+        return new AttentionLaneFilter(node.value as AttentionLane, attentionProfileProvider);
 
       case 'tag':
         if (node.operator === 'has') {

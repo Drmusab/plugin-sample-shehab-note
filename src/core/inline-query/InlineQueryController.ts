@@ -195,6 +195,7 @@ export class InlineQueryController {
     const engine = new QueryEngine(taskIndex, {
       urgencySettings: settings.urgency,
       escalationSettings: settings.escalation,
+      attentionSettings: settings.attention,
     });
     const globalQuery = GlobalQuery.getInstance();
     if (globalQuery.isEnabled() && globalQuery.getError()) {

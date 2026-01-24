@@ -51,6 +51,12 @@ export function explainFilter(filter: FilterNode): string {
     case 'escalation':
       return `${negate}Escalation ${filter.operator} ${escalationLabel}`;
 
+    case 'attention':
+      return `${negate}Attention ${filter.operator} ${filter.value}`;
+
+    case 'attention-lane':
+      return `${negate}Lane is ${filter.value}`;
+
     case 'tag':
       if (filter.operator === 'includes') {
         return `${negate}Tag includes "${filter.value}"`;
