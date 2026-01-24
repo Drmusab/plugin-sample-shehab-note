@@ -30,6 +30,7 @@ import { InlineToggleHandler } from "./commands/InlineToggleHandler";
 import { TaskCommands } from "./commands/TaskCommands";
 import { BlockActionEngine } from "@/core/block-actions/BlockActionEngine";
 import { BlockEventWatcher } from "@/core/block-actions/BlockEventWatcher";
+import type { PatternLearner } from "@/core/ml/PatternLearner";
 import "./index.scss";
 
 export default class RecurringTasksPlugin extends Plugin {
@@ -56,6 +57,7 @@ export default class RecurringTasksPlugin extends Plugin {
   private checkboxClickListener: ((event: MouseEvent) => void) | null = null;
   private blockActionEngine: BlockActionEngine | null = null;
   private blockEventWatcher: BlockEventWatcher | null = null;
+  private patternLearner: PatternLearner | null = null;
 
   async onload() {
     logger.info("Loading Recurring Tasks Plugin");
@@ -84,6 +86,7 @@ export default class RecurringTasksPlugin extends Plugin {
     this.eventService = this.taskManager.getEventService();
     const settingsService = this.taskManager.getSettingsService();
     this.settingsService = settingsService;
+    this.patternLearner = this.taskManager.getPatternLearner();
 
     this.blockActionEngine = new BlockActionEngine({
       repository: this.repository,
@@ -537,6 +540,7 @@ export default class RecurringTasksPlugin extends Plugin {
           eventService: this.eventService,
           shortcutManager: this.shortcutManager,
           settingsService: this.settingsService,
+          patternLearner: this.patternLearner ?? undefined,
           app: this.app,
         },
       });
@@ -771,8 +775,10 @@ export default class RecurringTasksPlugin extends Plugin {
       const timeoutId = globalThis.setTimeout(async () => {
         this.pendingCompletionTimeouts.delete(taskId);
         try {
+          const completionTimestamp = new Date().toISOString();
           await this.eventService.handleTaskCompleted(task);
           await this.scheduler.markTaskDone(taskId);
+          this.patternLearner?.recordCompletion(taskId, completionTimestamp);
 
           // Update topbar badge
           if (this.topbarMenu) {
@@ -940,6 +946,7 @@ export default class RecurringTasksPlugin extends Plugin {
       props: {
         repository: this.repository,
         settingsService: this.settingsService,
+        patternLearner: this.patternLearner ?? undefined,
         task,
         onClose: () => this.closeTaskEditor(),
         onSave: () => {

@@ -1,5 +1,29 @@
 import type { Task, CompletionHistoryEntry } from '@/core/models/Task';
 import type { Frequency } from '@/core/models/Frequency';
+import type { TaskRepositoryProvider } from '@/core/storage/TaskRepository';
+import { GlobalFilter } from '@/core/filtering/GlobalFilter';
+import type { SmartRecurrenceSettings } from '@/core/settings/PluginSettings';
+import type { PatternLearnerStore, PatternLearnerState, TaskPatternHistory } from '@/core/ml/PatternLearnerStore';
+
+export interface RecurrenceSuggestion {
+  taskId: string;
+  suggestedRRule: string;          // RRULE:FREQ=...
+  mode: 'fixed' | 'whenDone';
+  confidence: number;             // 0..1
+  evidence: SuggestionEvidence;   // explainability payload
+  generatedAt: string;            // ISO
+}
+
+export interface SuggestionEvidence {
+  sampleSize: number;             // number of completions used
+  timeSpanDays: number;           // range covered
+  detectedPattern: 'daily'|'weekly'|'monthly'|'weekday'|'custom';
+  interval: number;
+  byDay?: string[];               // MO,TU,...
+  byMonthDay?: number[];          // 1..31
+  stabilityScore: number;         // dispersion / jitter metric
+  examples: string[];             // a few completion dates shown to user
+}
 
 /**
  * Completion pattern data for analysis
@@ -520,5 +544,697 @@ export class PatternAnalyzer {
       isAnomalous: false,
       reason: ''
     };
+  }
+}
+
+type SensitivityLevel = "conservative" | "balanced" | "aggressive";
+
+interface PatternLearnerOptions {
+  store: PatternLearnerStore;
+  repository?: TaskRepositoryProvider;
+  settingsProvider: () => SmartRecurrenceSettings;
+}
+
+interface PatternCandidate {
+  type: SuggestionEvidence["detectedPattern"];
+  interval: number;
+  byDay?: string[];
+  byMonthDay?: number[];
+  stabilityScore: number;
+  patternStrength: number;
+  mode: "fixed" | "whenDone";
+  rrule: string;
+}
+
+export class PatternLearner {
+  private readonly store: PatternLearnerStore;
+  private readonly repository?: TaskRepositoryProvider;
+  private readonly settingsProvider: () => SmartRecurrenceSettings;
+  private state: PatternLearnerState = { version: 1, tasks: {} };
+  private persistTimeout: ReturnType<typeof setTimeout> | null = null;
+  private readonly MAX_COMPLETIONS = 60;
+  private readonly MAX_FEEDBACK_EVENTS = 200;
+
+  constructor(options: PatternLearnerOptions) {
+    this.store = options.store;
+    this.repository = options.repository;
+    this.settingsProvider = options.settingsProvider;
+  }
+
+  async load(): Promise<void> {
+    this.state = await this.store.load();
+  }
+
+  async clearHistory(): Promise<void> {
+    this.state = { version: 1, tasks: {} };
+    await this.store.clear();
+  }
+
+  recordCompletion(taskId: string, completedAtISO: string): void {
+    if (!this.isEnabled()) {
+      return;
+    }
+
+    const task = this.repository?.getTask(taskId);
+    if (task && !this.shouldAnalyzeTask(task)) {
+      return;
+    }
+
+    const history = this.getOrCreateHistory(taskId);
+    const normalizedDate = this.normalizeDate(completedAtISO);
+    const hasSameDay = history.completions.some((entry) => this.normalizeDate(entry) === normalizedDate);
+    if (hasSameDay) {
+      return;
+    }
+
+    history.completions.push(completedAtISO);
+    history.completions = history.completions
+      .map((entry) => new Date(entry))
+      .filter((date) => !Number.isNaN(date.getTime()))
+      .sort((a, b) => a.getTime() - b.getTime())
+      .map((date) => date.toISOString())
+      .slice(-this.MAX_COMPLETIONS);
+
+    this.schedulePersist();
+  }
+
+  analyzeTask(taskId: string): RecurrenceSuggestion | null {
+    if (!this.isEnabled()) {
+      return null;
+    }
+
+    const task = this.repository?.getTask(taskId);
+    if (task && !this.shouldAnalyzeTask(task)) {
+      return null;
+    }
+
+    const history = this.state.tasks[taskId];
+    if (!history || history.completions.length === 0) {
+      return null;
+    }
+
+    const completions = this.normalizeCompletions(history.completions);
+    const settings = this.settingsProvider();
+    const minSampleSize = Math.max(3, settings.minSampleSize ?? 5);
+    if (completions.length < minSampleSize) {
+      return null;
+    }
+
+    const candidate = this.detectPattern(completions, settings);
+    if (!candidate) {
+      return null;
+    }
+
+    const evidence = this.buildEvidence(candidate, completions);
+    const confidence = this.calculateConfidence(candidate, completions, minSampleSize, history);
+
+    if (!this.passesThresholds(candidate, confidence, evidence, settings)) {
+      return null;
+    }
+
+    const suggestion: RecurrenceSuggestion = {
+      taskId,
+      suggestedRRule: candidate.rrule,
+      mode: candidate.mode,
+      confidence,
+      evidence,
+      generatedAt: new Date().toISOString(),
+    };
+
+    history.lastAnalysisAt = suggestion.generatedAt;
+    this.schedulePersist();
+
+    return suggestion;
+  }
+
+  analyzeAllTasks(limit?: number): RecurrenceSuggestion[] {
+    if (!this.repository) {
+      return [];
+    }
+
+    const tasks = this.repository.getAllTasks();
+    const suggestions: RecurrenceSuggestion[] = [];
+    const allowedTasks = tasks.filter((task) => this.shouldAnalyzeTask(task));
+
+    for (const task of allowedTasks) {
+      const suggestion = this.analyzeTask(task.id);
+      if (suggestion) {
+        suggestions.push(suggestion);
+        if (limit && suggestions.length >= limit) {
+          break;
+        }
+      }
+    }
+
+    return suggestions;
+  }
+
+  acceptSuggestion(taskId: string, suggestionId: string): void {
+    this.recordFeedback(taskId, suggestionId, true);
+  }
+
+  rejectSuggestion(taskId: string, suggestionId: string): void {
+    this.recordFeedback(taskId, suggestionId, false);
+  }
+
+  getSuggestionId(suggestion: RecurrenceSuggestion): string {
+    return [
+      suggestion.taskId,
+      suggestion.suggestedRRule,
+      suggestion.mode,
+    ].join("|");
+  }
+
+  buildFrequencyFromSuggestion(suggestion: RecurrenceSuggestion): Frequency | null {
+    const parts = this.parseRRule(suggestion.suggestedRRule);
+    if (!parts) {
+      return null;
+    }
+
+    const whenDone = suggestion.mode === "whenDone";
+    const dtstart = this.getRecommendedDtstart(suggestion.taskId);
+
+    switch (parts.freq) {
+      case "DAILY":
+        return {
+          type: "daily",
+          interval: parts.interval ?? 1,
+          whenDone,
+          rruleString: suggestion.suggestedRRule,
+          dtstart,
+        };
+      case "WEEKLY": {
+        const weekdays = (parts.byDay ?? []).map((day) => this.mapRRuleDayToWeekday(day));
+        return {
+          type: "weekly",
+          interval: parts.interval ?? 1,
+          weekdays: weekdays.length > 0 ? weekdays : [1],
+          whenDone,
+          rruleString: suggestion.suggestedRRule,
+          dtstart,
+        };
+      }
+      case "MONTHLY": {
+        const dayOfMonth = (parts.byMonthDay?.[0] ?? 1);
+        return {
+          type: "monthly",
+          interval: parts.interval ?? 1,
+          dayOfMonth,
+          whenDone,
+          rruleString: suggestion.suggestedRRule,
+          dtstart,
+        };
+      }
+      default:
+        return null;
+    }
+  }
+
+  getRecommendedDtstart(taskId: string): string | undefined {
+    const history = this.state.tasks[taskId];
+    if (!history || history.completions.length === 0) {
+      return undefined;
+    }
+    const first = this.normalizeCompletions(history.completions)[0];
+    return first?.toISOString();
+  }
+
+  private recordFeedback(taskId: string, suggestionId: string, accepted: boolean): void {
+    const history = this.getOrCreateHistory(taskId);
+    const suggestion = this.extractSuggestionFromId(suggestionId);
+    history.feedback.push({
+      suggestionId,
+      accepted,
+      timestamp: new Date().toISOString(),
+      suggestedRRule: suggestion?.rrule ?? "",
+      mode: suggestion?.mode ?? "fixed",
+    });
+
+    if (history.feedback.length > this.MAX_FEEDBACK_EVENTS) {
+      history.feedback = history.feedback.slice(-this.MAX_FEEDBACK_EVENTS);
+    }
+
+    this.schedulePersist();
+  }
+
+  private getOrCreateHistory(taskId: string): TaskPatternHistory {
+    if (!this.state.tasks[taskId]) {
+      this.state.tasks[taskId] = {
+        taskId,
+        completions: [],
+        feedback: [],
+      };
+    }
+    return this.state.tasks[taskId];
+  }
+
+  private shouldAnalyzeTask(task: Task): boolean {
+    if (!this.isEnabled()) {
+      return false;
+    }
+
+    if (!task.enabled) {
+      return false;
+    }
+
+    const globalFilter = GlobalFilter.getInstance();
+    if (!globalFilter.shouldIncludeTask(task)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private isEnabled(): boolean {
+    return this.settingsProvider().enabled;
+  }
+
+  private schedulePersist(): void {
+    if (this.persistTimeout !== null) {
+      globalThis.clearTimeout(this.persistTimeout);
+    }
+
+    this.persistTimeout = globalThis.setTimeout(() => {
+      this.persistTimeout = null;
+      void this.store.save(this.state);
+    }, 500);
+  }
+
+  private normalizeDate(iso: string): string {
+    return new Date(iso).toISOString().slice(0, 10);
+  }
+
+  private normalizeCompletions(completions: string[]): Date[] {
+    const seen = new Set<string>();
+    const normalized: Date[] = [];
+
+    for (const entry of completions) {
+      const date = new Date(entry);
+      if (Number.isNaN(date.getTime())) {
+        continue;
+      }
+      const dateKey = date.toISOString().slice(0, 10);
+      if (seen.has(dateKey)) {
+        continue;
+      }
+      seen.add(dateKey);
+      normalized.push(date);
+    }
+
+    return normalized.sort((a, b) => a.getTime() - b.getTime());
+  }
+
+  private detectPattern(completions: Date[], settings: SmartRecurrenceSettings): PatternCandidate | null {
+    const deltas = this.calculateDayDeltas(completions);
+    if (deltas.length === 0) {
+      return null;
+    }
+
+    const sensitivity = this.getSensitivity(settings);
+    const daily = this.evaluateIntervalPattern({
+      completions,
+      expectedInterval: 1,
+      pattern: "daily",
+      toleranceDays: sensitivity.jitterToleranceDays,
+    });
+    const weekly = this.evaluateWeeklyPattern(completions, sensitivity.jitterToleranceDays);
+    const monthly = this.evaluateMonthlyPattern(completions);
+    const biweekly = this.evaluateIntervalPattern({
+      completions,
+      expectedInterval: 14,
+      pattern: "custom",
+      toleranceDays: sensitivity.jitterToleranceDays * 1.5,
+    });
+
+    const candidates = [daily, weekly, monthly, biweekly].filter(Boolean) as PatternCandidate[];
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    candidates.sort((a, b) => b.stabilityScore - a.stabilityScore);
+    return candidates[0];
+  }
+
+  private evaluateIntervalPattern(params: {
+    completions: Date[];
+    expectedInterval: number;
+    pattern: SuggestionEvidence["detectedPattern"];
+    toleranceDays: number;
+  }): PatternCandidate | null {
+    const { completions, expectedInterval, pattern, toleranceDays } = params;
+    const deltas = this.calculateDayDeltas(completions);
+    if (deltas.length === 0) {
+      return null;
+    }
+
+    const deviation = this.meanAbsoluteDeviation(deltas, expectedInterval);
+    const stabilityScore = this.clamp(1 - deviation / toleranceDays, 0, 1);
+    if (stabilityScore < 0.6) {
+      return null;
+    }
+
+    const rrule = `RRULE:FREQ=DAILY;INTERVAL=${expectedInterval}`;
+    return {
+      type: pattern,
+      interval: expectedInterval,
+      stabilityScore,
+      patternStrength: stabilityScore,
+      mode: "whenDone",
+      rrule,
+    };
+  }
+
+  private evaluateWeeklyPattern(completions: Date[], toleranceDays: number): PatternCandidate | null {
+    const weekdayCounts = this.countWeekdays(completions);
+    const total = completions.length;
+    const sorted = Array.from(weekdayCounts.entries()).sort((a, b) => b[1] - a[1]);
+    const byDay = sorted
+      .filter(([, count]) => count >= 2)
+      .map(([day]) => day)
+      .sort((a, b) => this.dayOrder(a) - this.dayOrder(b));
+    if (byDay.length === 0) {
+      return null;
+    }
+
+    const patternStrength = byDay.reduce((sum, day) => sum + (weekdayCounts.get(day) || 0), 0) / total;
+    const stabilityScore = this.weeklyStabilityScore(completions, byDay, toleranceDays);
+    if (patternStrength < 0.75 || stabilityScore < 0.6) {
+      return null;
+    }
+
+    const detectedPattern = this.isWeekdayPattern(byDay) ? "weekday" : "weekly";
+    const rrule = `RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=${byDay.join(",")}`;
+    const mode: "fixed" | "whenDone" = detectedPattern === "weekly" || detectedPattern === "weekday" ? "fixed" : "whenDone";
+
+    return {
+      type: detectedPattern,
+      interval: 1,
+      byDay,
+      stabilityScore,
+      patternStrength,
+      mode,
+      rrule,
+    };
+  }
+
+  private evaluateMonthlyPattern(completions: Date[]): PatternCandidate | null {
+    const dayCounts = new Map<number, number>();
+    for (const date of completions) {
+      dayCounts.set(date.getUTCDate(), (dayCounts.get(date.getUTCDate()) || 0) + 1);
+    }
+
+    const sorted = Array.from(dayCounts.entries()).sort((a, b) => b[1] - a[1]);
+    if (sorted.length === 0) {
+      return null;
+    }
+
+    const [dayOfMonth, count] = sorted[0];
+    const patternStrength = count / completions.length;
+    const stabilityScore = patternStrength;
+    if (patternStrength < 0.8) {
+      return null;
+    }
+
+    const rrule = `RRULE:FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=${dayOfMonth}`;
+    return {
+      type: "monthly",
+      interval: 1,
+      byMonthDay: [dayOfMonth],
+      stabilityScore,
+      patternStrength,
+      mode: "fixed",
+      rrule,
+    };
+  }
+
+  private calculateConfidence(
+    candidate: PatternCandidate,
+    completions: Date[],
+    minSampleSize: number,
+    history: TaskPatternHistory
+  ): number {
+    const sampleSize = completions.length;
+    const sizeScore = this.clamp(sampleSize / (minSampleSize + 4), 0, 1);
+    const recencyScore = this.getRecencyScore(completions);
+    const stabilityScore = candidate.stabilityScore;
+    const patternStrength = candidate.patternStrength;
+    let confidence = (
+      sizeScore * 0.35 +
+      stabilityScore * 0.35 +
+      recencyScore * 0.2 +
+      patternStrength * 0.1
+    );
+
+    confidence = this.applyFeedbackPenalty(confidence, candidate, history);
+
+    return this.round(confidence);
+  }
+
+  private applyFeedbackPenalty(
+    confidence: number,
+    candidate: PatternCandidate,
+    history: TaskPatternHistory
+  ): number {
+    if (!history.feedback || history.feedback.length === 0) {
+      return confidence;
+    }
+
+    const suggestionId = this.getSuggestionId({
+      taskId: history.taskId,
+      suggestedRRule: candidate.rrule,
+      mode: candidate.mode,
+      confidence,
+      evidence: {
+        sampleSize: 0,
+        timeSpanDays: 0,
+        detectedPattern: candidate.type,
+        interval: candidate.interval,
+        stabilityScore: candidate.stabilityScore,
+        examples: [],
+      },
+      generatedAt: history.lastAnalysisAt || new Date().toISOString(),
+    });
+
+    const relevant = history.feedback
+      .slice()
+      .reverse()
+      .find((feedback) => feedback.suggestionId === suggestionId);
+
+    if (!relevant) {
+      return confidence;
+    }
+
+    const daysSince = (Date.now() - new Date(relevant.timestamp).getTime()) / 86400000;
+    if (!relevant.accepted && daysSince < 30) {
+      return this.clamp(confidence - 0.2, 0, 1);
+    }
+    if (relevant.accepted) {
+      return this.clamp(confidence + 0.05, 0, 1);
+    }
+
+    return confidence;
+  }
+
+  private passesThresholds(
+    candidate: PatternCandidate,
+    confidence: number,
+    evidence: SuggestionEvidence,
+    settings: SmartRecurrenceSettings
+  ): boolean {
+    if (evidence.sampleSize < Math.max(5, settings.minSampleSize ?? 5)) {
+      return false;
+    }
+
+    const minConfidence = Math.max(0.5, settings.minConfidence ?? 0.75);
+    if (confidence < minConfidence) {
+      return false;
+    }
+
+    if (candidate.type === "weekly" || candidate.type === "weekday") {
+      if (evidence.timeSpanDays < 21) {
+        return false;
+      }
+    }
+
+    if (candidate.type === "monthly" && evidence.timeSpanDays < 60) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private buildEvidence(candidate: PatternCandidate, completions: Date[]): SuggestionEvidence {
+    const sampleSize = completions.length;
+    const timeSpanDays = this.calculateTimeSpanDays(completions);
+    const examples = completions
+      .slice(-6)
+      .map((date) => date.toISOString().slice(0, 10));
+
+    return {
+      sampleSize,
+      timeSpanDays,
+      detectedPattern: candidate.type,
+      interval: candidate.interval,
+      byDay: candidate.byDay,
+      byMonthDay: candidate.byMonthDay,
+      stabilityScore: this.round(candidate.stabilityScore),
+      examples,
+    };
+  }
+
+  private calculateTimeSpanDays(completions: Date[]): number {
+    if (completions.length < 2) {
+      return 0;
+    }
+    const first = completions[0];
+    const last = completions[completions.length - 1];
+    return Math.round((last.getTime() - first.getTime()) / 86400000);
+  }
+
+  private calculateDayDeltas(completions: Date[]): number[] {
+    const normalized = completions.map((date) =>
+      new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+    );
+    const deltas: number[] = [];
+    for (let i = 1; i < normalized.length; i++) {
+      const diffDays = (normalized[i].getTime() - normalized[i - 1].getTime()) / 86400000;
+      deltas.push(diffDays);
+    }
+    return deltas;
+  }
+
+  private meanAbsoluteDeviation(values: number[], target: number): number {
+    const total = values.reduce((sum, value) => sum + Math.abs(value - target), 0);
+    return total / values.length;
+  }
+
+  private countWeekdays(completions: Date[]): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const date of completions) {
+      const day = this.mapToRRuleDay(date.getUTCDay());
+      map.set(day, (map.get(day) || 0) + 1);
+    }
+    return map;
+  }
+
+  private weeklyStabilityScore(completions: Date[], byDay: string[], toleranceDays: number): number {
+    const dayGroups = new Map<string, Date[]>();
+    for (const date of completions) {
+      const day = this.mapToRRuleDay(date.getUTCDay());
+      if (!byDay.includes(day)) {
+        continue;
+      }
+      if (!dayGroups.has(day)) {
+        dayGroups.set(day, []);
+      }
+      dayGroups.get(day)!.push(date);
+    }
+
+    const deviations: number[] = [];
+    for (const dates of dayGroups.values()) {
+      dates.sort((a, b) => a.getTime() - b.getTime());
+      for (let i = 1; i < dates.length; i++) {
+        const diffDays = (dates[i].getTime() - dates[i - 1].getTime()) / 86400000;
+        deviations.push(Math.abs(diffDays - 7));
+      }
+    }
+
+    if (deviations.length === 0) {
+      return 0;
+    }
+
+    const avgDeviation = deviations.reduce((sum, value) => sum + value, 0) / deviations.length;
+    return this.clamp(1 - avgDeviation / toleranceDays, 0, 1);
+  }
+
+  private isWeekdayPattern(byDay: string[]): boolean {
+    const weekdays = ["MO", "TU", "WE", "TH", "FR"];
+    return weekdays.every((day) => byDay.includes(day));
+  }
+
+  private mapToRRuleDay(jsDay: number): string {
+    const days = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+    return days[jsDay] ?? "MO";
+  }
+
+  private dayOrder(day: string): number {
+    const order = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+    const index = order.indexOf(day);
+    return index === -1 ? 0 : index;
+  }
+
+  private mapRRuleDayToWeekday(day: string): number {
+    const map: Record<string, number> = {
+      MO: 0,
+      TU: 1,
+      WE: 2,
+      TH: 3,
+      FR: 4,
+      SA: 5,
+      SU: 6,
+    };
+    return map[day] ?? 0;
+  }
+
+  private parseRRule(rrule: string): { freq: string; interval?: number; byDay?: string[]; byMonthDay?: number[] } | null {
+    const normalized = rrule.replace(/^RRULE:/i, "");
+    const parts = normalized.split(";").reduce<Record<string, string>>((acc, part) => {
+      const [key, value] = part.split("=");
+      if (key && value) {
+        acc[key.toUpperCase()] = value.toUpperCase();
+      }
+      return acc;
+    }, {});
+
+    if (!parts.FREQ) {
+      return null;
+    }
+
+    return {
+      freq: parts.FREQ,
+      interval: parts.INTERVAL ? Number(parts.INTERVAL) : undefined,
+      byDay: parts.BYDAY ? parts.BYDAY.split(",") : undefined,
+      byMonthDay: parts.BYMONTHDAY ? parts.BYMONTHDAY.split(",").map((value) => Number(value)) : undefined,
+    };
+  }
+
+  private getRecencyScore(completions: Date[]): number {
+    const last = completions[completions.length - 1];
+    const daysSince = (Date.now() - last.getTime()) / 86400000;
+    return this.clamp(1 - daysSince / 30, 0, 1);
+  }
+
+  private getSensitivity(settings: SmartRecurrenceSettings): { jitterToleranceDays: number } {
+    const sensitivity = (settings.sensitivity || "conservative") as SensitivityLevel;
+    switch (sensitivity) {
+      case "aggressive":
+        return { jitterToleranceDays: 0.75 };
+      case "balanced":
+        return { jitterToleranceDays: 0.6 };
+      case "conservative":
+      default:
+        return { jitterToleranceDays: 0.5 };
+    }
+  }
+
+  private extractSuggestionFromId(
+    suggestionId: string
+  ): { rrule: string; mode: "fixed" | "whenDone" } | null {
+    const parts = suggestionId.split("|");
+    if (parts.length < 3) {
+      return null;
+    }
+    return {
+      rrule: parts[1],
+      mode: parts[2] === "whenDone" ? "whenDone" : "fixed",
+    };
+  }
+
+  private round(value: number): number {
+    return Math.round(value * 100) / 100;
+  }
+
+  private clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
   }
 }

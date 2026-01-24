@@ -8,6 +8,8 @@ import { GlobalFilter } from "@/core/filtering/GlobalFilter";
 import { GlobalQuery } from "@/core/query/GlobalQuery";
 import { SCHEDULER_INTERVAL_MS } from "@/utils/constants";
 import * as logger from "@/utils/logger";
+import { PatternLearner } from "@/core/ml/PatternLearner";
+import { PatternLearnerStore } from "@/core/ml/PatternLearnerStore";
 
 /**
  * TaskManager is a singleton that manages the lifecycle of all task-related services.
@@ -24,6 +26,7 @@ export class TaskManager {
   private scheduler!: Scheduler;
   private eventService!: EventService;
   private settingsService!: SettingsService;
+  private patternLearner!: PatternLearner;
 
   private constructor(plugin: Plugin) {
     this.plugin = plugin;
@@ -72,6 +75,15 @@ export class TaskManager {
     // Initialize scheduler
     this.scheduler = new Scheduler(this.storage, SCHEDULER_INTERVAL_MS, this.plugin);
     this.eventService.bindScheduler(this.scheduler);
+
+    // Initialize smart recurrence pattern learner
+    const patternStore = new PatternLearnerStore(this.plugin);
+    this.patternLearner = new PatternLearner({
+      store: patternStore,
+      repository: this.repository,
+      settingsProvider: () => this.settingsService.get().smartRecurrence,
+    });
+    await this.patternLearner.load();
 
     this.isInitialized = true;
     logger.info("TaskManager initialized successfully");
@@ -165,6 +177,14 @@ export class TaskManager {
   public getSettingsService(): SettingsService {
     this.ensureInitialized();
     return this.settingsService;
+  }
+
+  /**
+   * Get the smart recurrence pattern learner
+   */
+  public getPatternLearner(): PatternLearner {
+    this.ensureInitialized();
+    return this.patternLearner;
   }
 
   /**

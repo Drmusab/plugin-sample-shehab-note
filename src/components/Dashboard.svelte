@@ -33,6 +33,7 @@
   import TaskEditorModal from "./TaskEditorModal.svelte";
   import Settings from "./settings/Settings.svelte";
   import Icon from "./ui/Icon.svelte";
+  import type { PatternLearner } from "@/core/ml/PatternLearner";
 
   interface Props {
     repository: TaskRepositoryProvider;
@@ -41,9 +42,10 @@
     shortcutManager: ShortcutManager | null;
     settingsService: SettingsService;
     app: App;
+    patternLearner?: PatternLearner;
   }
 
-  let { repository, scheduler, eventService, shortcutManager, settingsService, app }: Props = $props();
+  let { repository, scheduler, eventService, shortcutManager, settingsService, app, patternLearner }: Props = $props();
 
   setContext(URGENCY_SETTINGS_CONTEXT_KEY, settingsService.get().urgency);
 
@@ -452,6 +454,7 @@
         {shortcutManager}
         {settingsService}
         {repository}
+        {patternLearner}
         onClose={handleCloseSettings}
       />
     </div>
@@ -461,6 +464,7 @@
         task={editingTask}
         {repository}
         {settingsService}
+        {patternLearner}
         onSave={handleSaveTask}
         onClose={handleCancelForm}
       />

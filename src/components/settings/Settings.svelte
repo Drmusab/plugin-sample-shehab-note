@@ -3,7 +3,8 @@
   import type { EventService } from "@/services/EventService";
   import type { SettingsService } from "@/core/settings/SettingsService";
   import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
-  import type { DependencyGraphSettings, InlineTaskSettings } from "@/core/settings/PluginSettings";
+  import type { DependencyGraphSettings, InlineTaskSettings, SmartRecurrenceSettings } from "@/core/settings/PluginSettings";
+  import type { PatternLearner } from "@/core/ml/PatternLearner";
   import { DEFAULT_NOTIFICATION_CONFIG } from "@/utils/constants";
   import { toast } from "@/utils/notifications";
   import type { ShortcutManager, ShortcutDisplay } from "@/commands/ShortcutManager";
@@ -15,10 +16,11 @@
     shortcutManager: ShortcutManager | null;
     settingsService: SettingsService;
     repository: TaskRepositoryProvider;
+    patternLearner?: PatternLearner;
     onClose?: () => void;
   }
 
-  let { eventService, shortcutManager, settingsService, repository, onClose }: Props = $props();
+  let { eventService, shortcutManager, settingsService, repository, patternLearner, onClose }: Props = $props();
 
   let config = $state<NotificationConfig>(DEFAULT_NOTIFICATION_CONFIG);
   let testingChannel: string | null = $state(null);
@@ -48,6 +50,19 @@
     hideCompletedByDefault: true,
     cycleHandlingMode: 'strict',
   });
+  let smartRecurrenceSettings = $state<SmartRecurrenceSettings>({
+    enabled: false,
+    autoAdjust: false,
+    minCompletionsForLearning: 10,
+    confidenceThreshold: 0.7,
+    sensitivity: 'conservative',
+    minSampleSize: 6,
+    minConfidence: 0.75,
+  });
+  const sensitivityOptions = ['conservative', 'balanced', 'aggressive'] as const;
+  const sensitivityIndex = $derived(
+    Math.max(0, sensitivityOptions.indexOf(smartRecurrenceSettings.sensitivity || 'conservative'))
+  );
 
   function refreshShortcuts() {
     if (!shortcutManager) {
@@ -115,6 +130,9 @@
     if (settings.dependencyGraph) {
       dependencyGraphSettings = { ...settings.dependencyGraph };
     }
+    if (settings.smartRecurrence) {
+      smartRecurrenceSettings = { ...settings.smartRecurrence };
+    }
   });
 
   async function handleSave() {
@@ -151,6 +169,36 @@
       toast.success("Dependency graph settings saved!");
     } catch (err) {
       toast.error("Failed to save dependency graph settings: " + err);
+    }
+  }
+
+  async function saveSmartRecurrenceSettings() {
+    try {
+      await settingsService.update({ smartRecurrence: smartRecurrenceSettings });
+      toast.success("Smart recurrence settings saved!");
+    } catch (err) {
+      toast.error("Failed to save smart recurrence settings: " + err);
+    }
+  }
+
+  function updateSensitivity(value: string) {
+    const index = Number(value);
+    smartRecurrenceSettings = {
+      ...smartRecurrenceSettings,
+      sensitivity: sensitivityOptions[index] ?? 'conservative',
+    };
+  }
+
+  async function clearSmartRecurrenceHistory() {
+    if (!patternLearner) {
+      toast.error("Pattern learner unavailable.");
+      return;
+    }
+    try {
+      await patternLearner.clearHistory();
+      toast.success("Smart recurrence history cleared.");
+    } catch (err) {
+      toast.error("Failed to clear smart recurrence history: " + err);
     }
   }
 
@@ -318,6 +366,90 @@
 
           <button class="settings__save-btn" onclick={saveDependencyGraphSettings}>
             Save dependency graph settings
+          </button>
+        </section>
+
+        <section class="settings__section">
+          <div class="settings__section-header">
+            <h3 class="settings__section-title">Smart Recurrence Suggestions</h3>
+            <label class="settings__toggle">
+              <input type="checkbox" bind:checked={smartRecurrenceSettings.enabled} />
+              <span>Enable suggestions</span>
+            </label>
+          </div>
+
+          <p class="settings__description">
+            Smart recurrence suggestions run locally and only analyze completion timestamps, titles, and tags.
+            Suggestions are opt-in and never auto-apply.
+          </p>
+
+          <div class="settings__field">
+            <label class="settings__label" for="smart-recurrence-sensitivity">Sensitivity</label>
+            <input
+              id="smart-recurrence-sensitivity"
+              class="settings__input settings__input--range"
+              type="range"
+              min="0"
+              max="2"
+              step="1"
+              value={sensitivityIndex}
+              oninput={(event) => updateSensitivity((event.currentTarget as HTMLInputElement).value)}
+              disabled={!smartRecurrenceSettings.enabled}
+              list="smart-recurrence-sensitivity-labels"
+            />
+            <datalist id="smart-recurrence-sensitivity-labels">
+              <option value="0" label="Conservative"></option>
+              <option value="1" label="Balanced"></option>
+              <option value="2" label="Aggressive"></option>
+            </datalist>
+            <div class="settings__hint">
+              Current: {smartRecurrenceSettings.sensitivity}
+            </div>
+          </div>
+
+          <div class="settings__field">
+            <label class="settings__label" for="smart-recurrence-min-samples">Minimum sample size</label>
+            <input
+              id="smart-recurrence-min-samples"
+              class="settings__input"
+              type="number"
+              min="3"
+              max="30"
+              bind:value={smartRecurrenceSettings.minSampleSize}
+              disabled={!smartRecurrenceSettings.enabled}
+            />
+          </div>
+
+          <div class="settings__field">
+            <label class="settings__label" for="smart-recurrence-confidence">Minimum confidence</label>
+            <input
+              id="smart-recurrence-confidence"
+              class="settings__input"
+              type="number"
+              min="0.5"
+              max="0.95"
+              step="0.05"
+              bind:value={smartRecurrenceSettings.minConfidence}
+              disabled={!smartRecurrenceSettings.enabled}
+            />
+            <div class="settings__hint">
+              Suggestions will only appear when confidence meets or exceeds this threshold.
+            </div>
+          </div>
+
+          <div class="settings__field">
+            <button
+              class="settings__save-btn settings__save-btn--secondary"
+              type="button"
+              onclick={clearSmartRecurrenceHistory}
+              disabled={!smartRecurrenceSettings.enabled}
+            >
+              Clear learned history
+            </button>
+          </div>
+
+          <button class="settings__save-btn" onclick={saveSmartRecurrenceSettings}>
+            Save smart recurrence settings
           </button>
         </section>
       {:else if activeSection === 'filter'}
@@ -708,6 +840,11 @@
     border-color: var(--b3-theme-primary);
   }
 
+  .settings__input--range {
+    padding: 0;
+    height: 28px;
+  }
+
   .settings__test-btn {
     padding: 8px 16px;
     background: var(--b3-theme-surface-lighter);
@@ -861,6 +998,16 @@
 
   .settings__save-btn:hover {
     background: var(--b3-theme-primary-light);
+  }
+
+  .settings__save-btn--secondary {
+    background: var(--b3-theme-surface-lighter);
+    color: var(--b3-theme-on-surface);
+    border: 1px solid var(--b3-border-color);
+  }
+
+  .settings__save-btn--secondary:hover {
+    background: var(--b3-theme-surface-light);
   }
   
   /* Auto-Creation Settings Styles */
