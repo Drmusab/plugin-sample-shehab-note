@@ -28,6 +28,8 @@ import { SiYuanApiAdapter } from "./core/api/SiYuanApiAdapter";
 import { AutoTaskCreator } from "./features/AutoTaskCreator";
 import { InlineToggleHandler } from "./commands/InlineToggleHandler";
 import { TaskCommands } from "./commands/TaskCommands";
+import { BlockActionEngine } from "@/core/block-actions/BlockActionEngine";
+import { BlockEventWatcher } from "@/core/block-actions/BlockEventWatcher";
 import "./index.scss";
 
 export default class RecurringTasksPlugin extends Plugin {
@@ -52,6 +54,8 @@ export default class RecurringTasksPlugin extends Plugin {
   private autoTaskCreator: AutoTaskCreator | null = null;
   private inlineToggleHandler: InlineToggleHandler | null = null;
   private checkboxClickListener: ((event: MouseEvent) => void) | null = null;
+  private blockActionEngine: BlockActionEngine | null = null;
+  private blockEventWatcher: BlockEventWatcher | null = null;
 
   async onload() {
     logger.info("Loading Recurring Tasks Plugin");
@@ -80,6 +84,18 @@ export default class RecurringTasksPlugin extends Plugin {
     this.eventService = this.taskManager.getEventService();
     const settingsService = this.taskManager.getSettingsService();
     this.settingsService = settingsService;
+
+    this.blockActionEngine = new BlockActionEngine({
+      repository: this.repository,
+      settingsProvider: () => this.settingsService.get(),
+      recurrenceEngine: this.scheduler.getRecurrenceEngine(),
+    });
+    this.blockEventWatcher = new BlockEventWatcher({
+      engine: this.blockActionEngine,
+      repository: this.repository,
+      settingsProvider: () => this.settingsService.get().blockActions,
+    });
+    this.blockEventWatcher.start();
 
     // Start scheduler and recover missed tasks
     try {
@@ -504,6 +520,11 @@ export default class RecurringTasksPlugin extends Plugin {
       this.inlineQueryController.destroy();
       this.inlineQueryController = null;
     }
+
+    if (this.blockEventWatcher) {
+      this.blockEventWatcher.stop();
+      this.blockEventWatcher = null;
+    }
   }
 
   private renderDashboard() {
@@ -550,6 +571,7 @@ export default class RecurringTasksPlugin extends Plugin {
       
       pluginEventBus.on('task:refresh', () => {
         // Dashboard will handle its own refresh
+        this.blockEventWatcher?.refreshLinkedBlocks();
       });
 
       // Also listen for window events for backward compatibility
@@ -916,6 +938,7 @@ export default class RecurringTasksPlugin extends Plugin {
       target: this.taskEditorContainer,
       props: {
         repository: this.repository,
+        settingsService: this.settingsService,
         task,
         onClose: () => this.closeTaskEditor(),
         onSave: () => {

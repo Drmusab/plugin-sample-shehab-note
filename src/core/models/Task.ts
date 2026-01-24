@@ -2,6 +2,7 @@ import type { Frequency } from "./Frequency";
 import { isValidFrequency } from "./Frequency";
 import { MAX_RECENT_COMPLETIONS, CURRENT_SCHEMA_VERSION } from "@/utils/constants";
 import { calculateUrgencyScore } from "@/core/urgency/UrgencyScoreCalculator";
+import type { BlockLinkedAction } from "@/core/block-actions/BlockActionTypes";
 
 /**
  * Custom action to take when task is completed
@@ -39,6 +40,9 @@ export interface Task {
 
   /** Cached block content for quick access */
   linkedBlockContent?: string;
+
+  /** Block-linked smart actions */
+  blockActions?: BlockLinkedAction[];
 
   /** Priority for routing */
   priority?: TaskPriority;

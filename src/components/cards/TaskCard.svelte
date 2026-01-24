@@ -93,6 +93,9 @@
     const trimmed = blockPreview.replace(/\s+/g, " ").trim();
     return trimmed.length > 220 ? `${trimmed.slice(0, 220)}…` : trimmed;
   });
+  const hasBlockActions = $derived(
+    () => task.blockActions?.some((action) => action.enabled) ?? false
+  );
 
   const quickSnoozeOptions = $derived(() =>
     SNOOZE_OPTIONS.filter((option) =>
@@ -235,6 +238,14 @@
         title="Priority:  {task.priority || 'normal'}"
       ></div>
       <h3 class="task-card__name">{task.name}</h3>
+      {#if hasBlockActions}
+        <span
+          class="task-card__block-actions-indicator"
+          title="Block-linked actions enabled"
+        >
+          🔗
+        </span>
+      {/if}
       {#if hasStreak}
         <span class="task-card__streak" title="{task.currentStreak} day streak">
           <Icon category="status" name="streak" size={16} alt="Streak" /> {task.currentStreak}
@@ -448,6 +459,15 @@
     display: flex;
     align-items: center;
     gap: 4px;
+  }
+
+  .task-card__block-actions-indicator {
+    font-size: 14px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: var(--b3-theme-surface-lighter);
+    border: 1px solid var(--b3-border-color);
+    color: var(--b3-theme-on-surface);
   }
 
   .task-card__edit-btn {

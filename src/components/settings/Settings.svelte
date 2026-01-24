@@ -23,7 +23,7 @@
   let config = $state<NotificationConfig>(DEFAULT_NOTIFICATION_CONFIG);
   let testingChannel: string | null = $state(null);
   let testResults = $state<{ [key: string]: { success: boolean; message: string } }>({});
-  let activeSection = $state<'general' | 'filter' | 'statuses' | 'shortcuts' | 'inlineTasks'>('general');
+  let activeSection = $state<'general' | 'filter' | 'statuses' | 'shortcuts' | 'inlineTasks' | 'blockActions'>('general');
   let shortcutList = $state<ShortcutDisplay[]>([]);
   let shortcutDrafts = $state<Record<string, string>>({});
   let inlineTaskSettings = $state<InlineTaskSettings>({
@@ -34,6 +34,13 @@
     strictParsing: false,
     showInlineHints: true,
     highlightManagedTasks: true,
+    enableInlineToggle: true,
+    updateBlockOnToggle: true,
+    showToggleNotifications: false,
+  });
+  let blockActionSettings = $state({
+    enabled: true,
+    debounceMs: 250,
   });
 
   function refreshShortcuts() {
@@ -96,6 +103,9 @@
     if (settings.inlineTasks) {
       inlineTaskSettings = { ...settings.inlineTasks };
     }
+    if (settings.blockActions) {
+      blockActionSettings = { ...settings.blockActions };
+    }
   });
 
   async function handleSave() {
@@ -114,6 +124,15 @@
       toast.success("Auto-creation settings saved!");
     } catch (err) {
       toast.error("Failed to save settings: " + err);
+    }
+  }
+
+  async function saveBlockActionSettings() {
+    try {
+      await settingsService.update({ blockActions: blockActionSettings });
+      toast.success("Block action settings saved!");
+    } catch (err) {
+      toast.error("Failed to save block action settings: " + err);
     }
   }
 
@@ -177,6 +196,12 @@
         onclick={() => activeSection = 'inlineTasks'}
       >
         Auto-Creation
+      </button>
+      <button 
+        class="settings__nav-btn {activeSection === 'blockActions' ? 'active' : ''}"
+        onclick={() => activeSection = 'blockActions'}
+      >
+        Block Actions
       </button>
     </nav>
 
@@ -414,6 +439,39 @@
 
           <button class="settings__save-btn" onclick={saveInlineTaskSettings}>
             Save Auto-Creation Settings
+          </button>
+        </section>
+      {:else if activeSection === 'blockActions'}
+        <section class="settings__section">
+          <div class="settings__section-header">
+            <h3 class="settings__section-title">Block-Linked Smart Actions</h3>
+          </div>
+
+          <div class="settings__field">
+            <label class="settings__label">
+              <input type="checkbox" bind:checked={blockActionSettings.enabled} />
+              Enable block-linked automation
+            </label>
+            <div class="settings__hint">
+              When enabled, linked block edits can update task status, schedule, and metadata.
+            </div>
+          </div>
+
+          <div class="settings__field">
+            <label class="settings__label" for="block-action-debounce">Debounce (ms)</label>
+            <input
+              id="block-action-debounce"
+              class="settings__input"
+              type="number"
+              min="0"
+              step="50"
+              bind:value={blockActionSettings.debounceMs}
+            />
+            <div class="settings__hint">Delay before reacting to rapid block edits.</div>
+          </div>
+
+          <button class="settings__save-btn" onclick={saveBlockActionSettings}>
+            Save Block Action Settings
           </button>
         </section>
       {/if}

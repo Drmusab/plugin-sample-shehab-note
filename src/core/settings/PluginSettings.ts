@@ -99,6 +99,9 @@ export interface PluginSettings {
   
   /** Inline task auto-creation configuration (Phase 3) */
   inlineTasks: InlineTaskSettings;
+
+  /** Block-linked smart actions configuration */
+  blockActions: BlockActionSettings;
 }
 
 /**
@@ -190,6 +193,14 @@ export interface InlineTaskSettings {
 }
 
 /**
+ * Block-linked smart action settings
+ */
+export interface BlockActionSettings {
+  enabled: boolean;
+  debounceMs: number;
+}
+
+/**
  * Default settings
  */
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -264,6 +275,10 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     enableInlineToggle: true,
     updateBlockOnToggle: true,
     showToggleNotifications: false,
+  },
+  blockActions: {
+    enabled: true,
+    debounceMs: 250,
   },
 };
 
@@ -361,6 +376,10 @@ export function mergeSettings(userSettings: Partial<PluginSettings>): PluginSett
     inlineTasks: {
       ...DEFAULT_SETTINGS.inlineTasks,
       ...userSettings.inlineTasks,
+    },
+    blockActions: {
+      ...DEFAULT_SETTINGS.blockActions,
+      ...userSettings.blockActions,
     },
   };
 }

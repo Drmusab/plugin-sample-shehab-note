@@ -450,7 +450,13 @@
     </div>
   {:else if showTaskForm}
     <div class="dashboard__overlay">
-      <TaskEditorModal task={editingTask} {repository} onSave={handleSaveTask} onClose={handleCancelForm} />
+      <TaskEditorModal
+        task={editingTask}
+        {repository}
+        {settingsService}
+        onSave={handleSaveTask}
+        onClose={handleCancelForm}
+      />
     </div>
   {:else}
     <div class="dashboard__tabs" role="tablist" aria-label="Dashboard tabs">

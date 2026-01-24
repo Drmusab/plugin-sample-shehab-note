@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import type { Task, TaskPriority } from "@/core/models/Task";
+  import type { BlockLinkedAction } from "@/core/block-actions/BlockActionTypes";
   import { createTask } from "@/core/models/Task";
   import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
+  import type { SettingsService } from "@/core/settings/SettingsService";
   import type { Frequency } from "@/core/models/Frequency";
   import { createDefaultFrequency } from "@/core/models/Frequency";
   import { RecurrenceParser } from "@/core/parsers/RecurrenceParser";
@@ -12,6 +14,7 @@
   import StatusSelector from "./ui/StatusSelector.svelte";
   import RecurrenceInput from "./ui/RecurrenceInput.svelte";
   import DependencyPicker from "./ui/DependencyPicker.svelte";
+  import BlockLinkedActionsEditor from "./ui/BlockLinkedActionsEditor.svelte";
 
   const DEFAULT_RECURRENCE_TEXT = "every day";
   const LABEL_BLOCKED_BY = "Blocked by (tasks that must complete first)";
@@ -19,12 +22,13 @@
 
   interface Props {
     repository: TaskRepositoryProvider;
+    settingsService: SettingsService;
     task?: Task;
     onClose: () => void;
     onSave?: (task: Task) => void;
   }
 
-  let { repository, task, onClose, onSave }: Props = $props();
+  let { repository, settingsService, task, onClose, onSave }: Props = $props();
 
   const isNew = !task;
   
@@ -41,6 +45,14 @@
   let recurrenceValid = $state(true);
   let blockedBy = $state<string[]>(task?.blockedBy || []);
   let dependsOn = $state<string[]>(task?.dependsOn || []);
+  let blockActions = $state<BlockLinkedAction[]>(task?.blockActions ? [...task.blockActions] : []);
+  let blockActionsEnabled = $state(settingsService.get().blockActions.enabled);
+
+  const blockActionContext = $derived(() => ({
+    status,
+    priority,
+    tags: task?.tags,
+  }));
   
   let touched = $state({
     name: false,
@@ -72,6 +84,7 @@
     requestAnimationFrame(() => {
       nameInput?.focus();
     });
+    blockActionsEnabled = settingsService.get().blockActions.enabled;
   });
 
   function handleRecurrenceChange(text: string, frequency: Frequency | null, isValid: boolean) {
@@ -95,6 +108,10 @@
 
   function handleDependsOnChange(selected: string[]) {
     dependsOn = selected;
+  }
+
+  function handleBlockActionsChange(actions: BlockLinkedAction[]) {
+    blockActions = actions;
   }
 
   async function handleSave() {
@@ -135,6 +152,7 @@
       savedTask.startAt = startAt ? new Date(startAt).toISOString() : undefined;
       savedTask.blockedBy = blockedBy.length > 0 ? blockedBy : undefined;
       savedTask.dependsOn = dependsOn.length > 0 ? dependsOn : undefined;
+      savedTask.blockActions = blockActions.length > 0 ? blockActions : undefined;
       savedTask.updatedAt = new Date().toISOString();
 
       // Handle status transitions
@@ -317,6 +335,18 @@
           excludeId={task?.id}
           onchange={handleDependsOnChange}
           label={LABEL_BLOCKS}
+        />
+      </div>
+
+      <!-- Block-Linked Actions -->
+      <div class="task-editor__field">
+        <BlockLinkedActionsEditor
+          value={blockActions}
+          linkedBlockId={task?.linkedBlockId}
+          linkedBlockContent={task?.linkedBlockContent}
+          taskContext={blockActionContext()}
+          featureEnabled={blockActionsEnabled}
+          onChange={handleBlockActionsChange}
         />
       </div>
 
