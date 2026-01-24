@@ -4,6 +4,7 @@
   import { QueryParser } from "@/core/query/QueryParser";
   import { QueryComposer } from "@/core/query/QueryComposer";
   import { GlobalQuery } from "@/core/query/GlobalQuery";
+  import { DependencyGraph } from "@/core/dependencies/DependencyGraph";
   import TaskCard from "../cards/TaskCard.svelte";
   import { toast } from "@/utils/notifications";
   import type { UrgencySettings } from "@/core/urgency/UrgencySettings";
@@ -54,6 +55,12 @@
   const urgencySettings = getContext<UrgencySettings | undefined>(URGENCY_SETTINGS_CONTEXT_KEY);
   const queryEngine = new QueryEngine(taskIndex, { urgencySettings });
   const queryComposer = new QueryComposer(new QueryParser());
+  const dependencyGraph = new DependencyGraph();
+
+  $effect(() => {
+    dependencyGraph.build(tasks);
+    queryEngine.setDependencyGraph(dependencyGraph);
+  });
 
   function executeQuery() {
     if (!queryInput.trim()) {

@@ -3,7 +3,7 @@
   import type { EventService } from "@/services/EventService";
   import type { SettingsService } from "@/core/settings/SettingsService";
   import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
-  import type { InlineTaskSettings } from "@/core/settings/PluginSettings";
+  import type { DependencyGraphSettings, InlineTaskSettings } from "@/core/settings/PluginSettings";
   import { DEFAULT_NOTIFICATION_CONFIG } from "@/utils/constants";
   import { toast } from "@/utils/notifications";
   import type { ShortcutManager, ShortcutDisplay } from "@/commands/ShortcutManager";
@@ -41,6 +41,12 @@
   let blockActionSettings = $state({
     enabled: true,
     debounceMs: 250,
+  });
+  let dependencyGraphSettings = $state<DependencyGraphSettings>({
+    enabled: true,
+    defaultDepth: 3,
+    hideCompletedByDefault: true,
+    cycleHandlingMode: 'strict',
   });
 
   function refreshShortcuts() {
@@ -106,6 +112,9 @@
     if (settings.blockActions) {
       blockActionSettings = { ...settings.blockActions };
     }
+    if (settings.dependencyGraph) {
+      dependencyGraphSettings = { ...settings.dependencyGraph };
+    }
   });
 
   async function handleSave() {
@@ -133,6 +142,15 @@
       toast.success("Block action settings saved!");
     } catch (err) {
       toast.error("Failed to save block action settings: " + err);
+    }
+  }
+
+  async function saveDependencyGraphSettings() {
+    try {
+      await settingsService.update({ dependencyGraph: dependencyGraphSettings });
+      toast.success("Dependency graph settings saved!");
+    } catch (err) {
+      toast.error("Failed to save dependency graph settings: " + err);
     }
   }
 
@@ -253,6 +271,54 @@
               {testResults.n8n.message}
             </div>
           {/if}
+        </section>
+
+        <section class="settings__section">
+          <div class="settings__section-header">
+            <h3 class="settings__section-title">Dependency Graph</h3>
+            <label class="settings__toggle">
+              <input type="checkbox" bind:checked={dependencyGraphSettings.enabled} />
+              <span>Enabled</span>
+            </label>
+          </div>
+
+          <div class="settings__field">
+            <label class="settings__label" for="dependency-depth">Default graph depth</label>
+            <input
+              id="dependency-depth"
+              class="settings__input"
+              type="number"
+              min="1"
+              max="10"
+              bind:value={dependencyGraphSettings.defaultDepth}
+            />
+          </div>
+
+          <div class="settings__field">
+            <label class="settings__label" for="dependency-cycle-mode">Cycle handling mode</label>
+            <select
+              id="dependency-cycle-mode"
+              class="settings__input"
+              bind:value={dependencyGraphSettings.cycleHandlingMode}
+            >
+              <option value="strict">Strict (block save)</option>
+              <option value="warn">Warn (allow save)</option>
+            </select>
+          </div>
+
+          <label class="settings__checkbox">
+            <input type="checkbox" bind:checked={dependencyGraphSettings.hideCompletedByDefault} />
+            <div>
+              <div class="settings__checkbox-label">Hide completed tasks by default</div>
+              <div class="settings__checkbox-description">
+                Keep the dependency graph focused on active work.
+              </div>
+            </div>
+          </label>
+
+          <button class="settings__save-btn" onclick={saveDependencyGraphSettings}>
+            Save dependency graph settings
+          </button>
         </section>
       {:else if activeSection === 'filter'}
         <GlobalFilterSettings {settingsService} {repository} />

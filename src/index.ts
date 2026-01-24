@@ -537,6 +537,7 @@ export default class RecurringTasksPlugin extends Plugin {
           eventService: this.eventService,
           shortcutManager: this.shortcutManager,
           settingsService: this.settingsService,
+          app: this.app,
         },
       });
     }

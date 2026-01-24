@@ -119,6 +119,9 @@ export interface Task {
   /** Task IDs this task depends on */
   dependsOn?: string[];
   
+  /** Task IDs blocked by this task (derived, not stored) */
+  blocks?: string[];
+
   /** Task IDs blocking this task */
   blockedBy?: string[];
   

@@ -10,6 +10,8 @@
   import { RecurrenceParser } from "@/core/parsers/RecurrenceParser";
   import { toast } from "@/utils/notifications";
   import { pluginEventBus } from "@/core/events/PluginEventBus";
+  import { CycleDetector } from "@/core/dependencies/CycleDetector";
+  import { DependencyIndex } from "@/core/dependencies/DependencyIndex";
   import PrioritySelector from "./ui/PrioritySelector.svelte";
   import StatusSelector from "./ui/StatusSelector.svelte";
   import RecurrenceInput from "./ui/RecurrenceInput.svelte";
@@ -154,6 +156,28 @@
       savedTask.dependsOn = dependsOn.length > 0 ? dependsOn : undefined;
       savedTask.blockActions = blockActions.length > 0 ? blockActions : undefined;
       savedTask.updatedAt = new Date().toISOString();
+
+      const dependencySettings = settingsService.get().dependencyGraph;
+      const shouldValidate = settingsService.get().dependencies?.autoValidate ?? true;
+      if (shouldValidate && savedTask.dependsOn && savedTask.dependsOn.length > 0) {
+        const tasks = repository.getAllTasks();
+        const nextTasks = tasks.some((existing) => existing.id === savedTask.id)
+          ? tasks.map((existing) => (existing.id === savedTask.id ? savedTask : existing))
+          : [...tasks, savedTask];
+        const index = new DependencyIndex();
+        index.build(nextTasks);
+        const detector = new CycleDetector(index);
+        const cycle = detector.findCycleFrom(savedTask.id);
+        if (cycle.length > 0) {
+          const cyclePath = cycle.join(" → ");
+          if (dependencySettings?.cycleHandlingMode === "warn") {
+            toast.warning(`Circular dependency detected: ${cyclePath}`);
+          } else {
+            toast.error(`Cannot save. Circular dependency detected: ${cyclePath}`);
+            return;
+          }
+        }
+      }
 
       // Handle status transitions
       if (status === "done" && !savedTask.lastCompletedAt) {

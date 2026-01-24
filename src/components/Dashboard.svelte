@@ -16,6 +16,7 @@
     upsertTask,
   } from "./dashboard/taskState";
   import { onDestroy, onMount } from "svelte";
+  import type { App } from "siyuan";
   import { setContext } from "svelte";
   import { URGENCY_SETTINGS_CONTEXT_KEY } from "@/core/urgency/UrgencyContext";
   import TodayTab from "./tabs/TodayTab.svelte";
@@ -27,6 +28,7 @@
   import DoneTab from "./tabs/DoneTab.svelte";
   import ProjectsTab from "./tabs/ProjectsTab.svelte";
   import SearchTab from "./tabs/SearchTab.svelte";
+  import DependenciesTab from "./tabs/DependenciesTab.svelte";
   import InsightsTab from "./tabs/InsightsTab.svelte";
   import TaskEditorModal from "./TaskEditorModal.svelte";
   import Settings from "./settings/Settings.svelte";
@@ -38,9 +40,10 @@
     eventService: EventService;
     shortcutManager: ShortcutManager | null;
     settingsService: SettingsService;
+    app: App;
   }
 
-  let { repository, scheduler, eventService, shortcutManager, settingsService }: Props = $props();
+  let { repository, scheduler, eventService, shortcutManager, settingsService, app }: Props = $props();
 
   setContext(URGENCY_SETTINGS_CONTEXT_KEY, settingsService.get().urgency);
 
@@ -49,7 +52,7 @@
   const timezoneHandler = scheduler.getTimezoneHandler();
   const recurrenceEngine = scheduler.getRecurrenceEngine();
 
-  type TabType = "inbox" | "today" | "upcoming" | "done" | "projects" | "search" | "all" | "timeline" | "analytics" | "insights";
+  type TabType = "inbox" | "today" | "upcoming" | "done" | "projects" | "search" | "all" | "timeline" | "analytics" | "insights" | "dependencies";
   let activeTab = $state<TabType>("today");
   let showTaskForm = $state(false);
   let showSettings = $state(false);
@@ -63,7 +66,7 @@
   let todayTasks = $derived(getTodayAndOverdueTasks(allTasks));
   let isRefreshing = $state(false);
   const panelLabelId = $derived(
-    ["inbox", "today", "upcoming", "done", "projects", "search", "all", "insights"]. includes(activeTab)
+    ["inbox", "today", "upcoming", "done", "projects", "search", "all", "insights", "dependencies"].includes(activeTab)
       ? `dashboard-tab-${activeTab}`
       : undefined
   );
@@ -152,6 +155,10 @@
 
   const projectsCount = $derived(
     allTasks.filter((t) => t.status !== "done" && t.status !== "cancelled").length
+  );
+
+  const blockedCount = $derived(
+    allTasks.filter((t) => isBlocked(t, allTasks)).length
   );
 
   // Refresh tasks from storage (initial load / explicit reloads only)
@@ -536,6 +543,19 @@
         <Icon category="navigation" name="search" size={16} alt="Search" /> Search
       </button>
       <button
+        id="dashboard-tab-dependencies"
+        class="dashboard__tab {activeTab === 'dependencies' ? 'active' : ''}"
+        role="tab"
+        aria-selected={activeTab === "dependencies"}
+        aria-controls="dashboard-panel"
+        onclick={() => (activeTab = "dependencies")}
+      >
+        <Icon category="navigation" name="link" size={16} alt="Dependencies" /> Dependencies
+        {#if blockedCount > 0}
+          <span class="dashboard__tab-badge">{blockedCount}</span>
+        {/if}
+      </button>
+      <button
         id="dashboard-tab-all"
         class="dashboard__tab {activeTab === 'all' ? 'active' : ''}"
         role="tab"
@@ -558,7 +578,7 @@
       </button>
     </div>
 
-    {#if activeTab !== "search" && activeTab !== "timeline" && activeTab !== "analytics" && activeTab !== "insights"}
+    {#if activeTab !== "search" && activeTab !== "timeline" && activeTab !== "analytics" && activeTab !== "insights" && activeTab !== "dependencies"}
       <div class="dashboard__filters">
         <span class="dashboard__filters-label">Quick Filters: </span>
         <button
@@ -655,6 +675,13 @@
           onEdit={handleEditTask}
           onDone={handleTaskDone}
           onDelete={handleDeleteTask}
+        />
+      {:else if activeTab === "dependencies"}
+        <DependenciesTab
+          tasks={allTasks}
+          {app}
+          {settingsService}
+          onEdit={handleEditTask}
         />
       {:else if activeTab === "all"}
         <AllTasksTab

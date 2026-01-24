@@ -49,6 +49,13 @@ export interface DependencySettings {
   autoValidate: boolean;
 }
 
+export interface DependencyGraphSettings {
+  enabled: boolean;
+  defaultDepth: number;
+  hideCompletedByDefault: boolean;
+  cycleHandlingMode: 'strict' | 'warn';
+}
+
 /**
  * Complete plugin settings
  */
@@ -61,6 +68,9 @@ export interface PluginSettings {
   
   /** Dependency configuration (Phase 5) */
   dependencies: DependencySettings;
+
+  /** Dependency graph configuration (Phase 6) */
+  dependencyGraph: DependencyGraphSettings;
   
   /** Filename-based date extraction (Phase 5) */
   filenameDate: FilenameDateConfig;
@@ -218,6 +228,12 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     warnOnCycles: true,
     autoValidate: true,
   },
+  dependencyGraph: {
+    enabled: true,
+    defaultDepth: 3,
+    hideCompletedByDefault: true,
+    cycleHandlingMode: 'strict',
+  },
   filenameDate: {
     enabled: false,
     patterns: ['YYYY-MM-DD', 'YYYYMMDD'],
@@ -328,6 +344,10 @@ export function mergeSettings(userSettings: Partial<PluginSettings>): PluginSett
     dependencies: {
       ...DEFAULT_SETTINGS.dependencies,
       ...userSettings.dependencies,
+    },
+    dependencyGraph: {
+      ...DEFAULT_SETTINGS.dependencyGraph,
+      ...userSettings.dependencyGraph,
     },
     filenameDate: {
       ...DEFAULT_SETTINGS.filenameDate,
