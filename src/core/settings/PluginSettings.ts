@@ -122,6 +122,9 @@ export interface SmartRecurrenceSettings {
   autoAdjust: boolean;
   minCompletionsForLearning: number;
   confidenceThreshold: number;
+  sensitivity: 'conservative' | 'balanced' | 'aggressive';
+  minSampleSize: number;
+  minConfidence: number;
 }
 
 /**
@@ -244,10 +247,13 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   globalQuery: DEFAULT_GLOBAL_QUERY_CONFIG,
   urgency: DEFAULT_URGENCY_SETTINGS,
   smartRecurrence: {
-    enabled: true,
+    enabled: false,
     autoAdjust: false,
     minCompletionsForLearning: 10,
     confidenceThreshold: 0.7,
+    sensitivity: 'conservative',
+    minSampleSize: 6,
+    minConfidence: 0.75,
   },
   naturalLanguage: {
     enabled: true,

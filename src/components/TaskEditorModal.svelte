@@ -6,9 +6,10 @@
   import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
   import type { SettingsService } from "@/core/settings/SettingsService";
   import type { Frequency } from "@/core/models/Frequency";
-  import { createDefaultFrequency } from "@/core/models/Frequency";
   import { RecurrenceParser } from "@/core/parsers/RecurrenceParser";
-  import { toast } from "@/utils/notifications";
+  import type { PatternLearner, RecurrenceSuggestion } from "@/core/ml/PatternLearner";
+  import { RecurrenceEngineRRULE } from "@/core/engine/recurrence/RecurrenceEngineRRULE";
+  import { showToast, toast } from "@/utils/notifications";
   import { pluginEventBus } from "@/core/events/PluginEventBus";
   import { CycleDetector } from "@/core/dependencies/CycleDetector";
   import { DependencyIndex } from "@/core/dependencies/DependencyIndex";
@@ -25,12 +26,13 @@
   interface Props {
     repository: TaskRepositoryProvider;
     settingsService: SettingsService;
+    patternLearner?: PatternLearner;
     task?: Task;
     onClose: () => void;
     onSave?: (task: Task) => void;
   }
 
-  let { repository, settingsService, task, onClose, onSave }: Props = $props();
+  let { repository, settingsService, patternLearner, task, onClose, onSave }: Props = $props();
 
   const isNew = !task;
   
@@ -45,16 +47,28 @@
   let recurrenceText = $state(task?.recurrenceText || (task?.frequency ? RecurrenceParser.stringify(task.frequency) : DEFAULT_RECURRENCE_TEXT));
   let recurrenceFrequency = $state<Frequency | null>(task?.frequency || null);
   let recurrenceValid = $state(true);
+  let whenDone = $state(task?.whenDone ?? recurrenceFrequency?.whenDone ?? false);
   let blockedBy = $state<string[]>(task?.blockedBy || []);
   let dependsOn = $state<string[]>(task?.dependsOn || []);
   let blockActions = $state<BlockLinkedAction[]>(task?.blockActions ? [...task.blockActions] : []);
   let blockActionsEnabled = $state(settingsService.get().blockActions.enabled);
+  let suggestion = $state<RecurrenceSuggestion | null>(null);
+  let showSuggestionDetails = $state(false);
+  let appliedSuggestion = $state<{
+    suggestion: RecurrenceSuggestion;
+    previousText: string;
+    previousFrequency: Frequency | null;
+    previousWhenDone: boolean;
+  } | null>(null);
+
+  const recurrenceEngine = new RecurrenceEngineRRULE();
 
   const blockActionContext = $derived(() => ({
     status,
     priority,
     tags: task?.tags,
   }));
+  const smartRecurrenceEnabled = $derived(settingsService.get().smartRecurrence.enabled);
   
   let touched = $state({
     name: false,
@@ -89,11 +103,25 @@
     blockActionsEnabled = settingsService.get().blockActions.enabled;
   });
 
+  $effect(() => {
+    if (!task || !patternLearner) {
+      suggestion = null;
+      return;
+    }
+    const smartSettings = settingsService.get().smartRecurrence;
+    if (!smartSettings.enabled) {
+      suggestion = null;
+      return;
+    }
+    suggestion = patternLearner.analyzeTask(task.id);
+  });
+
   function handleRecurrenceChange(text: string, frequency: Frequency | null, isValid: boolean) {
     recurrenceText = text;
     recurrenceFrequency = frequency;
     recurrenceValid = isValid;
     touched.recurrence = true;
+    whenDone = frequency?.whenDone ?? false;
   }
 
   function handlePriorityChange(newPriority: TaskPriority) {
@@ -150,6 +178,7 @@
       savedTask.priority = priority;
       savedTask.status = status;
       savedTask.recurrenceText = recurrenceText;
+      savedTask.whenDone = whenDone;
       savedTask.scheduledAt = scheduledAt ? new Date(scheduledAt).toISOString() : undefined;
       savedTask.startAt = startAt ? new Date(startAt).toISOString() : undefined;
       savedTask.blockedBy = blockedBy.length > 0 ? blockedBy : undefined;
@@ -188,6 +217,18 @@
       }
 
       await repository.saveTask(savedTask);
+
+      if (appliedSuggestion && patternLearner) {
+        const suggestionId = patternLearner.getSuggestionId(appliedSuggestion.suggestion);
+        patternLearner.acceptSuggestion(savedTask.id, suggestionId);
+        showUndoToast(
+          savedTask,
+          appliedSuggestion.previousFrequency,
+          appliedSuggestion.previousText,
+          appliedSuggestion.previousWhenDone
+        );
+        appliedSuggestion = null;
+      }
       
       if (onSave) {
         onSave(savedTask);
@@ -202,6 +243,90 @@
     } finally {
       isSaving = false;
     }
+  }
+
+  function showUndoToast(
+    savedTask: Task,
+    previousFrequency: Frequency | null,
+    previousText: string,
+    previousWhenDone: boolean
+  ) {
+    const snapshot = {
+      frequency: previousFrequency ?? savedTask.frequency,
+      recurrenceText: previousText,
+      whenDone: previousWhenDone,
+    };
+
+    const undo = async () => {
+      const updated = { ...savedTask };
+      updated.frequency = snapshot.frequency;
+      updated.recurrenceText = snapshot.recurrenceText;
+      updated.whenDone = snapshot.whenDone;
+      updated.updatedAt = new Date().toISOString();
+      await repository.saveTask(updated);
+      pluginEventBus.emit("task:refresh", undefined);
+      toast.success(`Reverted smart recurrence for "${updated.name}"`);
+    };
+
+    showToast({
+      message: `Smart recurrence applied to "${savedTask.name}".`,
+      type: "info",
+      duration: 5000,
+      actionLabel: "Undo",
+      onAction: () => void undo(),
+      showCountdown: true,
+    });
+  }
+
+  function applySuggestion(currentSuggestion: RecurrenceSuggestion) {
+    if (!patternLearner) {
+      return;
+    }
+
+    const nextFrequency = patternLearner.buildFrequencyFromSuggestion(currentSuggestion);
+    if (!nextFrequency) {
+      toast.error("Unable to apply suggestion.");
+      return;
+    }
+
+    appliedSuggestion = {
+      suggestion: currentSuggestion,
+      previousText: recurrenceText,
+      previousFrequency: recurrenceFrequency,
+      previousWhenDone: whenDone,
+    };
+
+    recurrenceFrequency = nextFrequency;
+    recurrenceText = RecurrenceParser.stringify(nextFrequency);
+    recurrenceValid = true;
+    whenDone = nextFrequency.whenDone ?? false;
+    touched.recurrence = true;
+
+    toast.success("Suggestion applied. Save to confirm.");
+  }
+
+  function dismissSuggestion(currentSuggestion: RecurrenceSuggestion) {
+    if (!patternLearner) {
+      return;
+    }
+    const suggestionId = patternLearner.getSuggestionId(currentSuggestion);
+    patternLearner.rejectSuggestion(currentSuggestion.taskId, suggestionId);
+    suggestion = null;
+    showSuggestionDetails = false;
+    toast.info("Suggestion dismissed.");
+  }
+
+  function getSuggestionSummary(currentSuggestion: RecurrenceSuggestion): string {
+    return recurrenceEngine.toNaturalLanguage(currentSuggestion.suggestedRRule) || currentSuggestion.suggestedRRule;
+  }
+
+  function getEvidenceSummary(currentSuggestion: RecurrenceSuggestion): string {
+    return `Based on ${currentSuggestion.evidence.sampleSize} completions over ${currentSuggestion.evidence.timeSpanDays} days.`;
+  }
+
+  function getDtStartHint(currentSuggestion: RecurrenceSuggestion): string {
+    const dtstart = patternLearner?.getRecommendedDtstart(currentSuggestion.taskId);
+    return dtstart ? `Suggested start: ${new Date(dtstart).toLocaleDateString()}` : "Suggested start: first completion date";
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -339,6 +464,72 @@
           <div class="task-editor__error">{recurrenceError}</div>
         {/if}
       </div>
+
+      {#if !isNew}
+        <div class="task-editor__field task-editor__suggestions">
+          <label>Smart Recurrence Suggestions</label>
+          {#if !smartRecurrenceEnabled}
+            <div class="task-editor__hint">Enable smart recurrence suggestions in settings to see recommendations.</div>
+          {:else if suggestion}
+            <div class="task-editor__suggestion-card">
+              <div class="task-editor__suggestion-header">
+                <div class="task-editor__suggestion-title">
+                  {getSuggestionSummary(suggestion)}
+                </div>
+                <span class="task-editor__confidence-badge">
+                  {Math.round(suggestion.confidence * 100)}% confident
+                </span>
+              </div>
+              <div class="task-editor__suggestion-reason">{getEvidenceSummary(suggestion)}</div>
+              <div class="task-editor__suggestion-examples">
+                Recent completions: {suggestion.evidence.examples.join(", ")}
+              </div>
+              <div class="task-editor__suggestion-actions">
+                <button
+                  type="button"
+                  class="task-editor__suggestion-btn"
+                  onclick={() => applySuggestion(suggestion)}
+                >
+                  Apply
+                </button>
+                <button
+                  type="button"
+                  class="task-editor__suggestion-btn task-editor__suggestion-btn--ghost"
+                  onclick={() => dismissSuggestion(suggestion)}
+                >
+                  Dismiss
+                </button>
+                <button
+                  type="button"
+                  class="task-editor__suggestion-btn task-editor__suggestion-btn--ghost"
+                  onclick={() => (showSuggestionDetails = !showSuggestionDetails)}
+                >
+                  {showSuggestionDetails ? "Hide why" : "Why?"}
+                </button>
+              </div>
+              {#if showSuggestionDetails}
+                <div class="task-editor__suggestion-details">
+                  <div><strong>Pattern:</strong> {suggestion.evidence.detectedPattern}</div>
+                  <div><strong>Interval:</strong> every {suggestion.evidence.interval} {suggestion.evidence.interval === 1 ? "period" : "periods"}</div>
+                  {#if suggestion.evidence.byDay}
+                    <div><strong>Days:</strong> {suggestion.evidence.byDay.join(", ")}</div>
+                  {/if}
+                  {#if suggestion.evidence.byMonthDay}
+                    <div><strong>Month day:</strong> {suggestion.evidence.byMonthDay.join(", ")}</div>
+                  {/if}
+                  <div><strong>Stability:</strong> {Math.round(suggestion.evidence.stabilityScore * 100)}%</div>
+                  <div><strong>Mode:</strong> {suggestion.mode === "whenDone" ? "When done (completion-driven)" : "Fixed schedule"}</div>
+                  <div>{getDtStartHint(suggestion)}</div>
+                </div>
+              {/if}
+            </div>
+          {:else}
+            <div class="task-editor__hint">
+              No high-confidence recurrence patterns yet. Keep completing this task to learn a pattern.
+            </div>
+          {/if}
+        </div>
+      {/if}
 
       <!-- Blocked By -->
       <div class="task-editor__field">
@@ -531,6 +722,80 @@
   .task-editor__hint {
     font-size: 12px;
     color: var(--b3-theme-on-surface-light);
+  }
+
+  .task-editor__suggestions {
+    background: var(--b3-theme-surface-lighter);
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .task-editor__suggestion-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .task-editor__suggestion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .task-editor__suggestion-title {
+    font-weight: 600;
+    color: var(--b3-theme-on-surface);
+  }
+
+  .task-editor__confidence-badge {
+    background: rgba(76, 175, 80, 0.15);
+    color: #2e7d32;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .task-editor__suggestion-reason,
+  .task-editor__suggestion-examples {
+    font-size: 12px;
+    color: var(--b3-theme-on-surface-light);
+  }
+
+  .task-editor__suggestion-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .task-editor__suggestion-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+    background: var(--b3-theme-primary);
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .task-editor__suggestion-btn--ghost {
+    background: transparent;
+    color: var(--b3-theme-on-surface);
+    border: 1px solid var(--b3-border-color);
+  }
+
+  .task-editor__suggestion-details {
+    background: var(--b3-theme-surface);
+    border: 1px solid var(--b3-border-color);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--b3-theme-on-surface);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .task-editor__timestamps {
