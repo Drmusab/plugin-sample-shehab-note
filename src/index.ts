@@ -31,6 +31,18 @@ import { TaskCommands } from "./commands/TaskCommands";
 import { BlockActionEngine } from "@/core/block-actions/BlockActionEngine";
 import { BlockEventWatcher } from "@/core/block-actions/BlockEventWatcher";
 import type { PatternLearner } from "@/core/ml/PatternLearner";
+
+// Webhook and related imports
+import { WebhookServer } from './webhook/WebhookServer';
+import { DEFAULT_WEBHOOK_CONFIG } from './config/WebhookConfig';
+import { ApiKeyManager } from './auth/ApiKeyManager';
+import { KeyStore } from './auth/KeyStore';
+import { WorkspaceManager } from './workspace/WorkspaceManager';
+import { WorkspaceStore } from './workspace/WorkspaceStore';
+import { ErrorLogger } from './logging/ErrorLogger';
+import { ErrorLogStore } from './logging/ErrorLogStore';
+import { DocumentLogger } from './logging/DocumentLogger';
+
 import "./index.scss";
 
 export default class RecurringTasksPlugin extends Plugin {
@@ -58,6 +70,15 @@ export default class RecurringTasksPlugin extends Plugin {
   private blockActionEngine: BlockActionEngine | null = null;
   private blockEventWatcher: BlockEventWatcher | null = null;
   private patternLearner: PatternLearner | null = null;
+  
+  // Webhook related properties
+  private webhookServer: WebhookServer | null = null;
+  private apiKeyManager: ApiKeyManager | null = null;
+  private workspaceManager: WorkspaceManager | null = null;
+  private errorLogger: ErrorLogger | null = null;
+  private keyStore: KeyStore | null = null;
+  private workspaceStore: WorkspaceStore | null = null;
+  private errorLogStore: ErrorLogStore | null = null;
 
   async onload() {
     logger.info("Loading Recurring Tasks Plugin");
@@ -106,6 +127,11 @@ export default class RecurringTasksPlugin extends Plugin {
     } catch (err) {
       logger.error("Failed to start TaskManager", err);
     }
+
+    // ========== Initialize Webhook System ==========
+    await this.initializeWebhookSystem();
+    
+    // ========== End Webhook System Initialization ==========
 
     // Register slash commands and hotkeys
     this.shortcutManager = await registerCommands(
@@ -505,6 +531,9 @@ export default class RecurringTasksPlugin extends Plugin {
       this.checkboxClickListener = null;
     }
     
+    // ========== Cleanup Webhook System ==========
+    await this.cleanupWebhookSystem();
+    
     // Destroy dashboard
     this.destroyDashboard();
     this.closeQuickAdd();
@@ -530,6 +559,129 @@ export default class RecurringTasksPlugin extends Plugin {
     }
   }
 
+  /**
+   * Initialize webhook system
+   */
+  private async initializeWebhookSystem(): Promise<void> {
+    try {
+      logger.info("Initializing webhook system...");
+      
+      // Get plugin data directory
+      const dataDir = this.dataDir || './data';
+      
+      // Initialize stores
+      this.keyStore = new KeyStore(dataDir);
+      await this.keyStore.init();
+
+      this.workspaceStore = new WorkspaceStore(dataDir);
+      await this.workspaceStore.init();
+
+      this.errorLogStore = new ErrorLogStore(dataDir);
+      await this.errorLogStore.init();
+
+      // Initialize managers
+      this.apiKeyManager = new ApiKeyManager(this.keyStore);
+      this.workspaceManager = new WorkspaceManager(this.workspaceStore);
+      
+      const documentLogger = new DocumentLogger(DEFAULT_WEBHOOK_CONFIG.errorLogging);
+      this.errorLogger = new ErrorLogger(
+        this.errorLogStore,
+        documentLogger,
+        DEFAULT_WEBHOOK_CONFIG.errorLogging
+      );
+
+      // Create default workspace if it doesn't exist
+      try {
+        await this.workspaceManager.createWorkspace('default', 'Default Workspace');
+        logger.info("✅ Created default workspace");
+      } catch (error) {
+        logger.info("ℹ️ Default workspace already exists");
+      }
+
+      // Generate initial API key if none exists
+      const keys = await this.apiKeyManager.listKeys('default');
+      if (keys.length === 0) {
+        const apiKey = await this.apiKeyManager.createKey('default', 'Initial API Key');
+        logger.info(`🔑 Generated initial API Key`);
+        // Store the key securely or show it to the user
+        this.storeApiKeySecurely(apiKey);
+      }
+
+      // Start webhook server
+      this.webhookServer = new WebhookServer(
+        DEFAULT_WEBHOOK_CONFIG,
+        this.apiKeyManager,
+        this.errorLogger,
+        this.taskManager,
+        this.repository // Assuming repository acts as storage
+      );
+
+      const { port, url } = await this.webhookServer.start();
+      
+      logger.info(`🌐 Webhook server started on ${url}`);
+      logger.info(`📋 Quick Start:`);
+      logger.info(`   curl ${url}/health`);
+      
+    } catch (error) {
+      logger.error("Failed to initialize webhook system", error);
+      // Don't fail the entire plugin if webhook system fails
+    }
+  }
+
+  /**
+   * Cleanup webhook system
+   */
+  private async cleanupWebhookSystem(): Promise<void> {
+    try {
+      if (this.webhookServer) {
+        await this.webhookServer.stop();
+        this.webhookServer = null;
+        logger.info("Webhook server stopped");
+      }
+      
+      if (this.keyStore) {
+        await this.keyStore.close();
+        this.keyStore = null;
+      }
+      
+      if (this.workspaceStore) {
+        await this.workspaceStore.close();
+        this.workspaceStore = null;
+      }
+      
+      if (this.errorLogStore) {
+        await this.errorLogStore.close();
+        this.errorLogStore = null;
+      }
+      
+      this.apiKeyManager = null;
+      this.workspaceManager = null;
+      this.errorLogger = null;
+      
+    } catch (error) {
+      logger.error("Failed to cleanup webhook system", error);
+    }
+  }
+
+  /**
+   * Store API key securely (implementation depends on your storage system)
+   */
+  private storeApiKeySecurely(apiKey: string): void {
+    // Store in plugin settings or secure storage
+    // This is a placeholder - implement based on your needs
+    logger.info("API Key generated. Store it securely for external access.");
+    
+    // Example: Store in plugin settings
+    this.settingsService.update({
+      webhook: {
+        apiKey: apiKey, // Consider encrypting this
+        lastGenerated: new Date().toISOString()
+      }
+    }).catch(err => {
+      logger.error("Failed to store API key", err);
+    });
+  }
+
   private renderDashboard() {
     if (this.dockEl && !this.dashboardComponent) {
       this.dashboardComponent = mount(Dashboard, {
@@ -542,6 +694,7 @@ export default class RecurringTasksPlugin extends Plugin {
           settingsService: this.settingsService,
           patternLearner: this.patternLearner ?? undefined,
           app: this.app,
+          webhookServer: this.webhookServer, // Pass webhook server to dashboard
         },
       });
     }
