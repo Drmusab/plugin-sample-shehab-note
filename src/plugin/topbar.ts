@@ -34,7 +34,7 @@ export class TopbarMenu {
    */
   destroy(): void {
     if (this.updateIntervalId !== null) {
-      window.clearInterval(this.updateIntervalId);
+      globalThis.clearInterval(this.updateIntervalId);
       this.updateIntervalId = null;
     }
 
@@ -128,7 +128,7 @@ export class TopbarMenu {
    * Start auto-update of badge every minute
    */
   private startAutoUpdate(): void {
-    this.updateIntervalId = window.setInterval(() => {
+    this.updateIntervalId = globalThis.setInterval(() => {
       this.updateBadge();
     }, 60 * 1000);
   }

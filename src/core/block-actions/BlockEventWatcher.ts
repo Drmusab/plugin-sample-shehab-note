@@ -134,7 +134,7 @@ export class BlockEventWatcher {
       clearTimeout(existing);
     }
 
-    const timeoutId = window.setTimeout(() => {
+    const timeoutId = globalThis.setTimeout(() => {
       this.contentCache.set(blockId, content);
       const event: BlockEvent = {
         type: "contentChanged",

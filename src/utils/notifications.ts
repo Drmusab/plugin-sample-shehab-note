@@ -49,7 +49,7 @@ export function showToast(options: ToastOptions): void {
     actionButton.addEventListener("click", () => {
       onAction();
       if (countdownInterval !== null) {
-        window.clearInterval(countdownInterval);
+        globalThis.clearInterval(countdownInterval);
       }
       if (toast.parentElement) {
         toast.parentElement.removeChild(toast);
@@ -58,11 +58,11 @@ export function showToast(options: ToastOptions): void {
     toast.appendChild(actionButton);
 
     if (showCountdown && duration > 0) {
-      countdownInterval = window.setInterval(() => {
+      countdownInterval = globalThis.setInterval(() => {
         remainingSeconds = Math.max(0, remainingSeconds - 1);
         actionButton.textContent = `${actionLabel} (${remainingSeconds}s)`;
         if (remainingSeconds <= 0 && countdownInterval !== null) {
-          window.clearInterval(countdownInterval);
+          globalThis.clearInterval(countdownInterval);
           countdownInterval = null;
         }
       }, 1000);
@@ -94,7 +94,7 @@ export function showToast(options: ToastOptions): void {
 
   const dismissToast = () => {
     if (countdownInterval !== null) {
-      window.clearInterval(countdownInterval);
+      globalThis.clearInterval(countdownInterval);
     }
     toast.style.animation = "slideOutRight 0.3s ease-out";
     setTimeout(() => {

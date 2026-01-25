@@ -257,7 +257,7 @@
     const previousTasks = allTasks;
     allTasks = removeTask(allTasks, task. id);
     
-    const undoTimeout = window.setTimeout(async () => {
+    const undoTimeout = globalThis.setTimeout(async () => {
       try {
         await repository.deleteTask(task.id);
       } catch (err) {
@@ -273,7 +273,7 @@
       duration: 5000,
       actionLabel: "Undo",
       onAction:  () => {
-        window.clearTimeout(undoTimeout);
+        globalThis.clearTimeout(undoTimeout);
         allTasks = previousTasks;
         toast.info(`Restored "${task.name}"`);
       },
@@ -347,7 +347,7 @@
     const tasksToDelete = allTasks. filter((task) => taskIdSet.has(task.id));
     allTasks = allTasks.filter((task) => !taskIdSet.has(task.id));
 
-    const undoTimeout = window.setTimeout(async () => {
+    const undoTimeout = globalThis.setTimeout(async () => {
       try {
         await Promise.all(tasksToDelete.map((task) => repository.deleteTask(task. id)));
       } catch (err) {
@@ -363,7 +363,7 @@
       duration: 5000,
       actionLabel: "Undo",
       onAction: () => {
-        window. clearTimeout(undoTimeout);
+        globalThis. clearTimeout(undoTimeout);
         allTasks = previousTasks;
         toast.info("Bulk delete undone");
       },

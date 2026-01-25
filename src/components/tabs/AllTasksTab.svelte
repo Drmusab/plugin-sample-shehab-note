@@ -81,12 +81,12 @@
   });
 
   $effect(() => {
-    const timeoutId = window.setTimeout(() => {
+    const timeoutId = globalThis.setTimeout(() => {
       searchQuery = searchInput;
     }, 300);
 
     return () => {
-      window.clearTimeout(timeoutId);
+      globalThis.clearTimeout(timeoutId);
     };
   });
 

@@ -39,14 +39,14 @@
 
   function scheduleNextDayRefresh() {
     if (dayTimer) {
-      window.clearTimeout(dayTimer);
+      globalThis.clearTimeout(dayTimer);
       dayTimer = null;
     }
     const now = new Date();
     const nextDay = startOfDay(new Date(now));
     nextDay.setDate(nextDay.getDate() + 1);
     const delay = nextDay.getTime() - now.getTime();
-    dayTimer = window.setTimeout(() => {
+    dayTimer = globalThis.setTimeout(() => {
       referenceDay = startOfDay(new Date());
       scheduleNextDayRefresh();
     }, Math.max(0, delay));
@@ -58,7 +58,7 @@
 
   onDestroy(() => {
     if (dayTimer) {
-      window.clearTimeout(dayTimer);
+      globalThis.clearTimeout(dayTimer);
     }
   });
 
