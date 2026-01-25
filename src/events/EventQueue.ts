@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { EventDeliveryRecord } from './types/EventTypes';
+import * as logger from '../utils/logger';
 
 /**
  * Persistent event queue
@@ -25,10 +26,25 @@ export class EventQueue {
 
     try {
       const data = await fs.readFile(this.persistPath, 'utf-8');
-      this.queue = JSON.parse(data);
-      console.log(`✅ Loaded ${this.queue.length} events from queue`);
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        this.queue = parsed;
+      } else {
+        this.queue = [];
+        logger.warn('Event queue storage corrupted; resetting queue', {
+          persistPath: this.persistPath,
+        });
+      }
+      logger.info(`Loaded ${this.queue.length} events from queue`);
     } catch (error) {
       // Queue file doesn't exist yet
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code !== 'ENOENT') {
+        logger.warn('Failed to load event queue; starting fresh', {
+          persistPath: this.persistPath,
+          error,
+        });
+      }
       this.queue = [];
     }
   }
@@ -134,6 +150,13 @@ export class EventQueue {
       return;
     }
 
-    await fs.writeFile(this.persistPath, JSON.stringify(this.queue, null, 2), 'utf-8');
+    try {
+      await fs.writeFile(this.persistPath, JSON.stringify(this.queue, null, 2), 'utf-8');
+    } catch (error) {
+      logger.error('Failed to persist event queue', {
+        persistPath: this.persistPath,
+        error,
+      });
+    }
   }
 }

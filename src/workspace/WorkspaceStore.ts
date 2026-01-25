@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Workspace } from './WorkspaceManager';
+import * as logger from '../utils/logger';
 
 
 /**
@@ -20,10 +21,28 @@ export class WorkspaceStore {
   async init(): Promise<void> {
     try {
       const data = await fs.readFile(this.storagePath, 'utf-8');
-      const workspaces: Workspace[] = JSON.parse(data);
-      workspaces.forEach((ws) => this.cache.set(ws.id, ws));
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((ws) => {
+          if (ws && typeof ws.id === 'string') {
+            this.cache.set(ws.id, ws);
+          }
+        });
+      } else {
+        logger.warn('Workspace storage corrupted; resetting cache', {
+          storagePath: this.storagePath,
+        });
+        this.cache = new Map();
+      }
     } catch (error) {
       // Start with empty cache
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code !== 'ENOENT') {
+        logger.warn('Failed to load workspace storage; starting fresh', {
+          storagePath: this.storagePath,
+          error,
+        });
+      }
       this.cache = new Map();
     }
   }
@@ -63,10 +82,17 @@ export class WorkspaceStore {
    */
   private async persist(): Promise<void> {
     const workspaces = Array.from(this.cache.values());
-    await fs.writeFile(
-      this.storagePath,
-      JSON.stringify(workspaces, null, 2),
-      'utf-8'
-    );
+    try {
+      await fs.writeFile(
+        this.storagePath,
+        JSON.stringify(workspaces, null, 2),
+        'utf-8'
+      );
+    } catch (error) {
+      logger.error('Failed to persist workspace storage', {
+        storagePath: this.storagePath,
+        error,
+      });
+    }
   }
 }

@@ -7,6 +7,7 @@ import {
   UpdateSubscriptionData,
 } from './types/SubscriptionTypes';
 import { WebhookError } from '../webhook/types/Error';
+import * as logger from '../utils/logger';
 
 /**
  * Manages webhook subscriptions
@@ -25,11 +26,29 @@ export class EventSubscriptionManager {
   async init(): Promise<void> {
     try {
       const data = await fs.readFile(this.storagePath, 'utf-8');
-      const subscriptions: WebhookSubscription[] = JSON.parse(data);
-      subscriptions.forEach((sub) => this.subscriptions.set(sub.id, sub));
-      console.log(`✅ Loaded ${subscriptions.length} webhook subscriptions`);
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((sub) => {
+          if (sub && typeof sub.id === 'string') {
+            this.subscriptions.set(sub.id, sub);
+          }
+        });
+      } else {
+        logger.warn('Webhook subscription storage corrupted; resetting cache', {
+          storagePath: this.storagePath,
+        });
+        this.subscriptions = new Map();
+      }
+      logger.info(`Loaded ${this.subscriptions.size} webhook subscriptions`);
     } catch (error) {
       // No subscriptions yet
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code !== 'ENOENT') {
+        logger.warn('Failed to load webhook subscriptions; starting fresh', {
+          storagePath: this.storagePath,
+          error,
+        });
+      }
       this.subscriptions = new Map();
     }
   }
@@ -276,6 +295,13 @@ export class EventSubscriptionManager {
    */
   private async persist(): Promise<void> {
     const subscriptions = Array.from(this.subscriptions.values());
-    await fs.writeFile(this.storagePath, JSON.stringify(subscriptions, null, 2), 'utf-8');
+    try {
+      await fs.writeFile(this.storagePath, JSON.stringify(subscriptions, null, 2), 'utf-8');
+    } catch (error) {
+      logger.error('Failed to persist webhook subscriptions', {
+        storagePath: this.storagePath,
+        error,
+      });
+    }
   }
 }

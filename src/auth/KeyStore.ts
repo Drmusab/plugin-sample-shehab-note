@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ApiKey } from './ApiKeyManager';
+import * as logger from '../utils/logger';
 
 /**
  * API key storage (encrypted at rest)
@@ -19,10 +20,28 @@ export class KeyStore {
   async init(): Promise<void> {
     try {
       const data = await fs.readFile(this.storagePath, 'utf-8');
-      const keys: ApiKey[] = JSON.parse(data);
-      keys.forEach((key) => this.cache.set(key.id, key));
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((key) => {
+          if (key && typeof key.id === 'string') {
+            this.cache.set(key.id, key);
+          }
+        });
+      } else {
+        logger.warn('API key storage corrupted; resetting cache', {
+          storagePath: this.storagePath,
+        });
+        this.cache = new Map();
+      }
     } catch (error) {
       // File doesn't exist yet, start with empty cache
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code !== 'ENOENT') {
+        logger.warn('Failed to load API key storage; starting fresh', {
+          storagePath: this.storagePath,
+          error,
+        });
+      }
       this.cache = new Map();
     }
   }
@@ -91,6 +110,13 @@ export class KeyStore {
    */
   private async persist(): Promise<void> {
     const keys = Array.from(this.cache.values());
-    await fs.writeFile(this.storagePath, JSON.stringify(keys, null, 2), 'utf-8');
+    try {
+      await fs.writeFile(this.storagePath, JSON.stringify(keys, null, 2), 'utf-8');
+    } catch (error) {
+      logger.error('Failed to persist API key storage', {
+        storagePath: this.storagePath,
+        error,
+      });
+    }
   }
 }

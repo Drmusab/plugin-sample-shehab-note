@@ -1,5 +1,6 @@
 import type { FrequencyType } from "@/core/models/Frequency";
 import type { TaskPriority } from "@/core/models/Task";
+import * as logger from "@/utils/logger";
 
 export interface TaskTemplate {
   id: string;
@@ -60,7 +61,11 @@ function persistTemplates(templates: TaskTemplate[]): void {
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+  try {
+    window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+  } catch (error) {
+    logger.warn("Failed to persist task templates", { error });
+  }
 }
 
 export function createTemplateId(): string {

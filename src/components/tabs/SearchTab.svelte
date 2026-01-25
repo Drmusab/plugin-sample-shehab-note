@@ -110,10 +110,15 @@
     try {
       const stored = localStorage.getItem("query-history");
       if (stored) {
-        queryHistory = JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          queryHistory = parsed.filter((item): item is string => typeof item === "string");
+        } else {
+          queryHistory = [];
+        }
       }
     } catch (e) {
-      // Ignore errors
+      queryHistory = [];
     }
   }
 
