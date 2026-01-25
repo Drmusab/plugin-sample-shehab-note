@@ -57,7 +57,95 @@ export class CompiledGlobalFilter {
    * Fast boolean check
    */
   matches(task: Task): boolean {
-    return this.explain(task).included;
+    const path = task.path ? this.normalizePath(task.path) : undefined;
+    const tags = task.tags ?? [];
+    const taskText = task.name || '';
+    const hasRegexTaskText = this.regexTargets.has('taskText');
+    const hasRegexPath = this.regexTargets.has('path');
+    const hasRegexFileName = this.regexTargets.has('fileName');
+    let fileName: string | undefined;
+
+    if (this.excludePathMatchers.length > 0 && path) {
+      for (const matcher of this.excludePathMatchers) {
+        if (matcher.match(path)) {
+          return false;
+        }
+      }
+    }
+
+    if (this.includePathMatchers.length > 0) {
+      if (!path) {
+        return false;
+      }
+      let matched = false;
+      for (const matcher of this.includePathMatchers) {
+        if (matcher.match(path)) {
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        return false;
+      }
+    }
+
+    if (this.excludeTagsSet.size > 0 && tags.length > 0) {
+      for (const tag of tags) {
+        if (this.excludeTagsSet.has(this.normalizeTag(tag))) {
+          return false;
+        }
+      }
+    }
+
+    if (this.includeTagsSet.size > 0) {
+      if (tags.length === 0) {
+        return false;
+      }
+      let matched = false;
+      for (const tag of tags) {
+        if (this.includeTagsSet.has(this.normalizeTag(tag))) {
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        return false;
+      }
+    }
+
+    if (this.excludeRegex) {
+      if (hasRegexTaskText && this.excludeRegex.test(taskText)) {
+        return false;
+      }
+      if (hasRegexPath && path && this.excludeRegex.test(path)) {
+        return false;
+      }
+      if (hasRegexFileName) {
+        fileName = path ? this.extractFileName(path) : task.path ? this.extractFileName(task.path) : undefined;
+        if (fileName && this.excludeRegex.test(fileName)) {
+          return false;
+        }
+      }
+    }
+
+    if (this.includeRegex) {
+      let matched = false;
+      if (hasRegexTaskText && this.includeRegex.test(taskText)) {
+        matched = true;
+      } else if (hasRegexPath && path && this.includeRegex.test(path)) {
+        matched = true;
+      } else if (hasRegexFileName) {
+        fileName = fileName ?? (path ? this.extractFileName(path) : task.path ? this.extractFileName(task.path) : undefined);
+        if (fileName && this.includeRegex.test(fileName)) {
+          matched = true;
+        }
+      }
+      if (!matched) {
+        return false;
+      }
+    }
+
+    return true;
   }
   
   /**
@@ -74,12 +162,18 @@ export class CompiledGlobalFilter {
    * Exclude always wins. 
    */
   explain(task: Task): FilterDecision {
-    const ctx = this.buildContext(task);
+    const path = task.path ? this.normalizePath(task.path) : undefined;
+    const tags = task.tags ?? [];
+    const taskText = task.name || '';
+    const hasRegexTaskText = this.regexTargets.has('taskText');
+    const hasRegexPath = this.regexTargets.has('path');
+    const hasRegexFileName = this.regexTargets.has('fileName');
+    let fileName: string | undefined;
     
     // 1. Exclude paths (fastest first, wins)
-    if (this.excludePathMatchers.length > 0 && ctx.path) {
+    if (this.excludePathMatchers.length > 0 && path) {
       for (const matcher of this.excludePathMatchers) {
-        if (matcher.match(ctx.path)) {
+        if (matcher.match(path)) {
           return {
             included: false,
             reason: 'Excluded by path pattern',
@@ -91,7 +185,7 @@ export class CompiledGlobalFilter {
     
     // 2. Include paths (if non-empty, must match one)
     if (this.includePathMatchers.length > 0) {
-      if (! ctx.path) {
+      if (!path) {
         return {
           included: false,
           reason: 'includePaths set but task has no path metadata',
@@ -99,7 +193,7 @@ export class CompiledGlobalFilter {
       }
       let matched = false;
       for (const matcher of this.includePathMatchers) {
-        if (matcher.match(ctx.path)) {
+        if (matcher.match(path)) {
           matched = true;
           break;
         }
@@ -113,13 +207,14 @@ export class CompiledGlobalFilter {
     }
     
     // 3. Exclude tags (wins)
-    if (this.excludeTagsSet.size > 0 && ctx.tags. length > 0) {
-      for (const tag of ctx.tags) {
-        if (this.excludeTagsSet.has(tag)) {
+    if (this.excludeTagsSet.size > 0 && tags.length > 0) {
+      for (const tag of tags) {
+        const normalizedTag = this.normalizeTag(tag);
+        if (this.excludeTagsSet.has(normalizedTag)) {
           return {
             included: false,
             reason:  'Excluded by tag',
-            matchedRule: { type: 'excludeTag', pattern: tag },
+            matchedRule: { type: 'excludeTag', pattern: normalizedTag },
           };
         }
       }
@@ -127,15 +222,15 @@ export class CompiledGlobalFilter {
     
     // 4. Include tags (if non-empty, must have at least one)
     if (this.includeTagsSet. size > 0) {
-      if (ctx.tags.length === 0) {
+      if (tags.length === 0) {
         return {
           included: false,
           reason:  'includeTags set but task has no tags',
         };
       }
       let matched = false;
-      for (const tag of ctx.tags) {
-        if (this.includeTagsSet.has(tag)) {
+      for (const tag of tags) {
+        if (this.includeTagsSet.has(this.normalizeTag(tag))) {
           matched = true;
           break;
         }
@@ -150,17 +245,27 @@ export class CompiledGlobalFilter {
     
     // 5. Exclude regex (wins)
     if (this.excludeRegex) {
-      const targets = this.extractRegexTargets(task, ctx);
-      for (const [targetType, targetValue] of targets) {
-        if (this.excludeRegex. test(targetValue)) {
+      if (hasRegexTaskText && this.excludeRegex.test(taskText)) {
+        return {
+          included: false,
+          reason: 'Excluded by regex',
+          matchedRule: { type: 'excludeRegex', pattern: this.excludeRegex.source, target: 'taskText' },
+        };
+      }
+      if (hasRegexPath && path && this.excludeRegex.test(path)) {
+        return {
+          included: false,
+          reason: 'Excluded by regex',
+          matchedRule: { type: 'excludeRegex', pattern: this.excludeRegex.source, target: 'path' },
+        };
+      }
+      if (hasRegexFileName) {
+        fileName = path ? this.extractFileName(path) : task.path ? this.extractFileName(task.path) : undefined;
+        if (fileName && this.excludeRegex.test(fileName)) {
           return {
             included: false,
             reason: 'Excluded by regex',
-            matchedRule: { 
-              type: 'excludeRegex', 
-              pattern:  this.excludeRegex.source, 
-              target: targetType 
-            },
+            matchedRule: { type: 'excludeRegex', pattern: this.excludeRegex.source, target: 'fileName' },
           };
         }
       }
@@ -168,12 +273,15 @@ export class CompiledGlobalFilter {
     
     // 6. Include regex (must match)
     if (this.includeRegex) {
-      const targets = this.extractRegexTargets(task, ctx);
       let matched = false;
-      for (const [, targetValue] of targets) {
-        if (this.includeRegex.test(targetValue)) {
+      if (hasRegexTaskText && this.includeRegex.test(taskText)) {
+        matched = true;
+      } else if (hasRegexPath && path && this.includeRegex.test(path)) {
+        matched = true;
+      } else if (hasRegexFileName) {
+        fileName = fileName ?? (path ? this.extractFileName(path) : task.path ? this.extractFileName(task.path) : undefined);
+        if (fileName && this.includeRegex.test(fileName)) {
           matched = true;
-          break;
         }
       }
       if (!matched) {
@@ -187,26 +295,6 @@ export class CompiledGlobalFilter {
     
     // Passed all filters
     return { included: true, reason: 'Passed all filters' };
-  }
-  
-  private buildContext(task: Task) {
-    return {
-      path: task.path ?  this.normalizePath(task. path) : undefined,
-      fileName: task.path ? this.extractFileName(task.path) : undefined,
-      tags: (task.tags || []).map(t => this.normalizeTag(t)),
-      taskText: task.name || '',
-    };
-  }
-  
-  private extractRegexTargets(
-    task: Task, 
-    ctx: ReturnType<typeof this.buildContext>
-  ): Array<[string, string]> {
-    const targets: Array<[string, string]> = [];
-    if (this.regexTargets. has('taskText')) targets.push(['taskText', ctx.taskText]);
-    if (this.regexTargets.has('path') && ctx.path) targets.push(['path', ctx.path]);
-    if (this.regexTargets.has('fileName') && ctx.fileName) targets.push(['fileName', ctx.fileName]);
-    return targets;
   }
   
   private normalizePath(path: string): string {

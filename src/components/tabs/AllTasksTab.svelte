@@ -31,7 +31,7 @@
       (a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()
     )
   );
-  const filteredTasks = $derived(() => {
+  const filteredTasks = $derived.by(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) {
       return sortedTasks;

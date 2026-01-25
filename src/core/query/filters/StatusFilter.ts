@@ -46,6 +46,9 @@ export class StatusSymbolFilter extends Filter {
 // Convenience filters for common queries
 export class DoneFilter extends Filter {
   matches(task: Task): boolean {
+    if (task.status) {
+      return task.status === 'done';
+    }
     const registry = StatusRegistry.getInstance();
     const statusSymbol = task.statusSymbol || ' ';
     const status = registry.get(statusSymbol);
@@ -55,6 +58,9 @@ export class DoneFilter extends Filter {
 
 export class NotDoneFilter extends Filter {
   matches(task: Task): boolean {
+    if (task.status) {
+      return task.status !== 'done';
+    }
     const registry = StatusRegistry.getInstance();
     const statusSymbol = task.statusSymbol || ' ';
     const status = registry.get(statusSymbol);

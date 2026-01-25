@@ -126,6 +126,10 @@ export class InlineQueryController {
       return;
     }
 
+    if (!this.indexReady) {
+      this.indexReady = true;
+    }
+
     const seen = new Set<string>();
     roots.forEach((root) => {
       const blocks = this.parser.parse(root);
@@ -144,7 +148,6 @@ export class InlineQueryController {
       }
     });
 
-    this.indexReady = true;
   }
 
   private renderBlock(state: InlineQueryBlockState): void {

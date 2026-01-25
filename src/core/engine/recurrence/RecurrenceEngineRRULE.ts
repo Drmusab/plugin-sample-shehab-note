@@ -3,6 +3,7 @@ import type { Frequency } from "@/core/models/Frequency";
 import { RRule, RRuleSet, rrulestr } from "rrule";
 import { getUserTimezone } from "@/utils/timezone";
 import * as logger from "@/utils/logger";
+import { MAX_RECOVERY_ITERATIONS } from "@/utils/constants";
 
 /**
  * RecurrenceEngine using RFC 5545-compliant RRULE as single source of truth
@@ -13,6 +14,7 @@ import * as logger from "@/utils/logger";
 export class RecurrenceEngineRRULE {
   // Cache parsed RRule objects for performance
   private rruleCache = new Map<string, RRule>();
+  private legacyTaskCounter = 0;
 
   /**
    * Get next occurrence after a reference date
@@ -385,7 +387,7 @@ export class RecurrenceEngineRRULE {
    */
   private createLegacyTask(frequency: Frequency, dueAt: Date, options?: { whenDone?: boolean; timezone?: string }): Task {
     return {
-      id: `legacy-${Date.now()}`,
+      id: this.nextLegacyId(),
       name: `legacy-frequency-${frequency.type}`,
       frequency,
       dueAt: dueAt.toISOString(),
@@ -478,6 +480,10 @@ export class RecurrenceEngineRRULE {
     frequency: Frequency,
     firstOccurrence: Date
   ): Date[] {
+    if (lastCheckedAt >= now) {
+      return [];
+    }
+
     // Ensure frequency has rruleString
     const freq = { ...frequency };
     if (!freq.rruleString) {
@@ -489,6 +495,16 @@ export class RecurrenceEngineRRULE {
     const tempTask = this.createLegacyTask(freq, firstOccurrence);
 
     // Get all occurrences between lastCheckedAt and now
-    return this.getOccurrencesBetween(tempTask, lastCheckedAt, now);
+    const occurrences = this.getOccurrencesBetween(tempTask, lastCheckedAt, now)
+      .filter(date => date > lastCheckedAt && date < now);
+    if (occurrences.length > MAX_RECOVERY_ITERATIONS) {
+      return occurrences.slice(0, MAX_RECOVERY_ITERATIONS);
+    }
+    return occurrences;
+  }
+
+  private nextLegacyId(): string {
+    this.legacyTaskCounter += 1;
+    return `legacy-${Date.now()}-${this.legacyTaskCounter}`;
   }
 }

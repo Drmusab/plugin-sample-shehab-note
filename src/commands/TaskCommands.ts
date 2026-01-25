@@ -165,7 +165,8 @@ export class TaskCommands {
         }
       } else {
         // No recurrence - simple completion
-        if (this.settings?.dates.autoAddDone && !updatedTask.doneAt) {
+        const autoAddDone = this.settings?.dates.autoAddDone ?? true;
+        if (autoAddDone && !updatedTask.doneAt) {
           updatedTask.doneAt = new Date().toISOString();
         }
         await this.repository.saveTask(updatedTask);

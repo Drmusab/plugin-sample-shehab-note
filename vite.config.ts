@@ -30,7 +30,12 @@ function svgUrlPlugin() {
 export default defineConfig({
   plugins: [
     svgUrlPlugin(),
-    svelte(),
+    svelte({
+      compilerOptions: {
+        generate: isTest ? "dom" : undefined,
+        dev: isTest || mode === "development",
+      },
+    }),
     viteStaticCopy({
       targets: [
         { src: "plugin.json", dest: "./" },
@@ -61,6 +66,7 @@ export default defineConfig({
           }
         : {}),
     },
+    ...(isTest ? { conditions: ["browser"] } : {}),
   },
   build: {
     outDir: "dist",

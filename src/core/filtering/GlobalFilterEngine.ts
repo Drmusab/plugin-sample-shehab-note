@@ -48,16 +48,23 @@ export class GlobalFilterEngine {
     }
 
     // Evaluate each rule
-    const matches = activeRules.map(rule =>
+    if (this.config.mode === 'include') {
+      const pathRules = activeRules.filter(rule => rule.type === 'path');
+      const otherRules = activeRules.filter(rule => rule.type !== 'path');
+      const pathMatch = pathRules.length === 0
+        ? true
+        : pathRules.some(rule => this.evaluateRule(rule, blockContent, blockPath));
+      const otherMatch = otherRules.length === 0
+        ? true
+        : otherRules.some(rule => this.evaluateRule(rule, blockContent, blockPath));
+      return pathMatch && otherMatch;
+    }
+
+    // Exclude mode: pass if NO rule matches (NOR logic)
+    const anyMatch = activeRules.some(rule =>
       this.evaluateRule(rule, blockContent, blockPath)
     );
-
-    const allMatch = matches.every(m => m);
-    const anyMatch = matches.some(m => m);
-
-    // Include mode: pass if ALL rules match (AND logic)
-    // Exclude mode: pass if NO rule matches (NOR logic)
-    return this.config.mode === 'include' ? allMatch : !anyMatch;
+    return !anyMatch;
   }
 
   /**
@@ -130,12 +137,21 @@ export class GlobalFilterEngine {
       return true;
     }
 
-    const matches = activeRules.map(rule =>
+    if (this.config.mode === 'include') {
+      const pathRules = activeRules.filter(rule => rule.type === 'path');
+      const otherRules = activeRules.filter(rule => rule.type !== 'path');
+      const pathMatch = pathRules.length === 0
+        ? true
+        : pathRules.some(rule => this.evaluateRule(rule, content, path));
+      const otherMatch = otherRules.length === 0
+        ? true
+        : otherRules.some(rule => this.evaluateRule(rule, content, path));
+      return pathMatch && otherMatch;
+    }
+    const anyMatch = activeRules.some(rule =>
       this.evaluateRule(rule, content, path)
     );
-    const allMatch = matches.every(m => m);
-    const anyMatch = matches.some(m => m);
-    return this.config.mode === 'include' ? allMatch : !anyMatch;
+    return !anyMatch;
   }
 
   /**
