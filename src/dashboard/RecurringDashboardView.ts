@@ -13,7 +13,6 @@ import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
 import type { SettingsService } from "@/core/settings/SettingsService";
 import type { PatternLearner } from "@/core/ml/PatternLearner";
 import type { RecurrenceEngineRRULE } from "@/core/engine/recurrence/RecurrenceEngineRRULE";
-import { TaskDraftAdapter } from "@/adapters/TaskDraftAdapter";
 import { ObsidianTasksUIBridge } from "@/adapters/ObsidianTasksUIBridge";
 import { pluginEventBus } from "@/core/events/PluginEventBus";
 import { toast } from "@/utils/notifications";
@@ -67,26 +66,60 @@ export class RecurringDashboardView {
     // Get all tasks for dependency resolution
     const allTasks = this.getAllTasks();
 
-    // Convert task using adapter
-    const editableTask = this.currentTask
-      ? TaskDraftAdapter.toEditableTask(this.currentTask, allTasks)
-      : TaskDraftAdapter.createEmptyEditableTask();
+    // Convert task using bridge - EditTask expects Task, not EditableTask
+    const obsidianTask = this.currentTask
+      ? ObsidianTasksUIBridge.toObsidianTask(this.currentTask)
+      : ObsidianTasksUIBridge.toObsidianTask(this.createEmptyTask());
 
-    // Get all tasks for dependency picker
-    const allEditableTasks = allTasks.map(task => 
-      TaskDraftAdapter.toEditableTask(task, allTasks)
+    // Convert all tasks to Obsidian format for the UI
+    const allObsidianTasks = allTasks.map(task => 
+      ObsidianTasksUIBridge.toObsidianTask(task)
     );
 
     // Mount EditTask component
     this.component = mount(EditTask, {
       target: wrapper,
       props: {
-        task: editableTask,
+        task: obsidianTask,
         statusOptions: this.getStatusOptions(),
-        allTasks: allEditableTasks,
+        allTasks: allObsidianTasks,
         onSubmit: this.handleSubmit.bind(this),
       },
     });
+  }
+
+  /**
+   * Create an empty task for new task creation
+   */
+  private createEmptyTask(): Task {
+    const now = new Date().toISOString();
+    return {
+      id: this.generateTaskId(),
+      name: '',
+      dueAt: now,
+      frequency: { type: 'daily', interval: 1 },
+      enabled: true,
+      status: 'todo',
+      priority: 'normal',
+      createdAt: now,
+      updatedAt: now,
+      completionCount: 0,
+      missCount: 0,
+      currentStreak: 0,
+      bestStreak: 0,
+      recentCompletions: [],
+      snoozeCount: 0,
+      maxSnoozes: 3,
+      version: 1,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+  }
+
+  /**
+   * Generate a unique task ID
+   */
+  private generateTaskId(): string {
+    return `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**
@@ -112,16 +145,13 @@ export class RecurringDashboardView {
       return;
     }
 
-    // The first updated task is an EditableTask-like object
-    const editableTask = updatedTasks[0];
+    // The first updated task is an ObsidianTask object
+    const obsidianTask = updatedTasks[0];
     
     try {
-      // Validate using adapter
-      TaskDraftAdapter.validate(editableTask);
-      
-      // Convert EditableTask to Recurring Task using adapter
-      const recurringTask = TaskDraftAdapter.fromEditableTask(
-        editableTask,
+      // Convert ObsidianTask to Recurring Task using bridge
+      const recurringTask = ObsidianTasksUIBridge.fromObsidianTask(
+        obsidianTask,
         this.currentTask
       );
 
