@@ -4,6 +4,8 @@
   
   export let task: Task;
   export let selected: boolean = false;
+  export let bulkSelected: boolean = false;
+  export let onBulkToggle: (() => void) | undefined = undefined;
   export let isDragging: boolean = false;
   export let onDragStart: ((task: Task) => void) | undefined = undefined;
   export let onDragEnd: (() => void) | undefined = undefined;
@@ -63,7 +65,7 @@
 >
   <span class="drag-handle" aria-label="Drag to reorder">⋮⋮</span>
   <div class="task-row-wrapper">
-    <TaskRow {task} {selected} />
+    <TaskRow {task} {selected} {bulkSelected} {onBulkToggle} />
   </div>
 </div>
 

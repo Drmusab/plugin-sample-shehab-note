@@ -1,16 +1,21 @@
 <script lang="ts">
   import TaskRow from './TaskRow.svelte';
   import DraggableTaskRow from './DraggableTaskRow.svelte';
+  import BulkActionsBar from './BulkActionsBar.svelte';
+  import BulkModeToggle from './BulkModeToggle.svelte';
   import type { Task } from '@/vendor/obsidian-tasks/types/Task';
   import { onMount, onDestroy } from 'svelte';
   import { clearSelection } from '@/stores/selectedTask';
   import { sortByOrder } from '@/utils/reorderTasks';
+  import { bulkSelectionStore } from '@/stores/bulkSelectionStore';
   
   export let tasks: Task[];
   export let selectedTaskId: string | undefined = undefined;
   export let onTaskSelect: (task: Task) => void;
   export let onNewTask: () => void;
   export let onTaskReorder: ((reorderedTasks: Task[]) => void) | undefined = undefined;
+  export let onBulkUpdate: ((updatedTasks: Task[]) => void) | undefined = undefined;
+  export let onBulkDelete: ((taskIds: string[]) => void) | undefined = undefined;
   export let enableDragReorder: boolean = false;
   
   let focusIndex = 0;
@@ -83,7 +88,16 @@
   }
   
   function handleTaskClick(task: Task) {
-    onTaskSelect(task);
+    // In bulk mode, clicking toggles selection
+    if ($bulkSelectionStore.enabled) {
+      bulkSelectionStore.toggleTask(task.id);
+    } else {
+      onTaskSelect(task);
+    }
+  }
+  
+  function handleBulkToggle(taskId: string) {
+    bulkSelectionStore.toggleTask(taskId);
   }
   
   // Drag-and-drop handlers
@@ -136,10 +150,19 @@
 </script>
 
 <div class="task-list-pane" bind:this={containerElement}>
+  {#if $bulkSelectionStore.enabled}
+    <BulkActionsBar 
+      allTasks={displayTasks}
+      {onBulkUpdate}
+      {onBulkDelete}
+    />
+  {/if}
+  
   <div class="task-list-header">
     <div class="task-count">
       {displayTasks.length} {displayTasks.length === 1 ? 'task' : 'tasks'}
     </div>
+    <BulkModeToggle />
     <button class="new-task-btn" on:click={onNewTask}>
       + New Task
     </button>
@@ -156,6 +179,8 @@
           <DraggableTaskRow 
             {task}
             selected={task.id === selectedTaskId}
+            bulkSelected={$bulkSelectionStore.selectedIds.has(task.id)}
+            onBulkToggle={() => handleBulkToggle(task.id)}
             isDragging={draggingTask?.id === task.id}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
@@ -166,6 +191,8 @@
             <TaskRow 
               {task} 
               selected={task.id === selectedTaskId}
+              bulkSelected={$bulkSelectionStore.selectedIds.has(task.id)}
+              onBulkToggle={() => handleBulkToggle(task.id)}
             />
           </div>
         {/if}
