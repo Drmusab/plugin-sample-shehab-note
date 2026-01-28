@@ -27,7 +27,7 @@
   let config = $state<NotificationConfig>(DEFAULT_NOTIFICATION_CONFIG);
   let testingChannel: string | null = $state(null);
   let testResults = $state<{ [key: string]: { success: boolean; message: string } }>({});
-  let activeSection = $state<'general' | 'filter' | 'statuses' | 'shortcuts' | 'inlineTasks' | 'blockActions' | 'escalation' | 'attention'>('general');
+  let activeSection = $state<'general' | 'filter' | 'statuses' | 'shortcuts' | 'inlineTasks' | 'blockActions' | 'escalation' | 'attention' | 'dashboard'>('general');
   let shortcutList = $state<ShortcutDisplay[]>([]);
   let shortcutDrafts = $state<Record<string, string>>({});
   let inlineTaskSettings = $state<InlineTaskSettings>({
@@ -60,6 +60,11 @@
     sensitivity: 'conservative',
     minSampleSize: 6,
     minConfidence: 0.75,
+  });
+  let splitViewSettings = $state({
+    useSplitViewDashboard: true,
+    splitViewRatio: 0.4,
+    autoSaveDelay: 500,
   });
   const sensitivityOptions = ['conservative', 'balanced', 'aggressive'] as const;
   const sensitivityIndex = $derived(
@@ -135,6 +140,9 @@
     if (settings.smartRecurrence) {
       smartRecurrenceSettings = { ...settings.smartRecurrence };
     }
+    if (settings.splitViewDashboard) {
+      splitViewSettings = { ...settings.splitViewDashboard };
+    }
   });
 
   async function handleSave() {
@@ -201,6 +209,15 @@
       toast.success("Smart recurrence history cleared.");
     } catch (err) {
       toast.error("Failed to clear smart recurrence history: " + err);
+    }
+  }
+
+  async function saveSplitViewSettings() {
+    try {
+      await settingsService.update({ splitViewDashboard: splitViewSettings });
+      toast.success("Dashboard settings saved! Reload to apply changes.");
+    } catch (err) {
+      toast.error("Failed to save dashboard settings: " + err);
     }
   }
 
@@ -282,6 +299,12 @@
         onclick={() => activeSection = 'blockActions'}
       >
         Block Actions
+      </button>
+      <button 
+        class="settings__nav-btn {activeSection === 'dashboard' ? 'active' : ''}"
+        onclick={() => activeSection = 'dashboard'}
+      >
+        Dashboard
       </button>
     </nav>
 
@@ -690,6 +713,73 @@
             Save Block Action Settings
           </button>
         </section>
+      {:else if activeSection === 'dashboard'}
+        <section class="settings__section">
+          <div class="settings__section-header">
+            <h3 class="settings__section-title">Dashboard Interface</h3>
+          </div>
+
+          <p class="settings__description">
+            Choose between the classic dashboard and the new split-view interface.
+          </p>
+
+          <div class="settings__field">
+            <label class="settings__label">
+              <input type="checkbox" bind:checked={splitViewSettings.useSplitViewDashboard} />
+              Use Split-View Dashboard (Beta)
+            </label>
+            <div class="settings__hint">
+              Enable the new split-view interface for faster task editing.
+              <br><strong>Features:</strong> Inline editing without popups • Auto-save (500ms) • Keyboard navigation (↑↓ Enter)
+            </div>
+          </div>
+
+          {#if splitViewSettings.useSplitViewDashboard}
+            <div class="settings__subsection">
+              <h4 class="settings__subsection-title">Split-View Options</h4>
+
+              <div class="settings__field">
+                <label class="settings__label" for="auto-save-delay">Auto-save delay (ms)</label>
+                <input
+                  id="auto-save-delay"
+                  class="settings__input"
+                  type="number"
+                  min="100"
+                  max="2000"
+                  step="100"
+                  bind:value={splitViewSettings.autoSaveDelay}
+                />
+                <div class="settings__hint">
+                  Time to wait after typing before auto-saving changes (default: 500ms)
+                </div>
+              </div>
+
+              <div class="settings__field">
+                <label class="settings__label" for="split-ratio">Split ratio</label>
+                <input
+                  id="split-ratio"
+                  class="settings__input"
+                  type="number"
+                  min="0.2"
+                  max="0.6"
+                  step="0.05"
+                  bind:value={splitViewSettings.splitViewRatio}
+                />
+                <div class="settings__hint">
+                  Layout proportion: {(splitViewSettings.splitViewRatio * 100).toFixed(0)}% list, {((1 - splitViewSettings.splitViewRatio) * 100).toFixed(0)}% editor
+                </div>
+              </div>
+            </div>
+          {/if}
+
+          <div class="settings__info-box">
+            ℹ️ You can switch back to the classic dashboard anytime by unchecking the option above.
+          </div>
+
+          <button class="settings__save-btn" onclick={saveSplitViewSettings}>
+            Save Dashboard Settings
+          </button>
+        </section>
       {/if}
     </div>
   </div>
@@ -1016,6 +1106,16 @@
 
   .settings__save-btn:hover {
     background: var(--b3-theme-primary-light);
+  }
+
+  .settings__info-box {
+    margin-top: 1rem;
+    padding: 12px 16px;
+    background: var(--b3-theme-surface);
+    border-left: 3px solid var(--b3-theme-primary);
+    border-radius: 4px;
+    color: var(--b3-theme-on-surface);
+    font-size: 13px;
   }
 
   .settings__save-btn--secondary {

@@ -162,6 +162,23 @@ export interface PluginSettings {
 
   /** Block-linked smart actions configuration */
   blockActions: BlockActionSettings;
+
+  /** Phase 3: Split-view dashboard configuration */
+  splitViewDashboard: SplitViewDashboardSettings;
+}
+
+/**
+ * Split-view dashboard settings (Phase 3)
+ */
+export interface SplitViewDashboardSettings {
+  /** Enable split-view dashboard instead of legacy dashboard */
+  useSplitViewDashboard: boolean;
+  
+  /** Split-view layout ratio (0.4 = 40% list, 60% editor) */
+  splitViewRatio: number;
+  
+  /** Auto-save delay in milliseconds */
+  autoSaveDelay: number;
 }
 
 /**
@@ -393,6 +410,11 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     enabled: true,
     debounceMs: 250,
   },
+  splitViewDashboard: {
+    useSplitViewDashboard: true, // Default to split-view for new installs
+    splitViewRatio: 0.4,
+    autoSaveDelay: 500,
+  },
 };
 
 /**
@@ -535,6 +557,10 @@ export function mergeSettings(userSettings: Partial<PluginSettings>): PluginSett
     blockActions: {
       ...DEFAULT_SETTINGS.blockActions,
       ...userSettings.blockActions,
+    },
+    splitViewDashboard: {
+      ...DEFAULT_SETTINGS.splitViewDashboard,
+      ...userSettings.splitViewDashboard,
     },
   };
 }

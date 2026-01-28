@@ -16,6 +16,7 @@
 import { mount, unmount } from "svelte";
 import EditTask from "@/vendor/obsidian-tasks/ui/EditTask.svelte";
 import TaskListPanel from "@/dashboard/components/TaskListPanel.svelte";
+import DashboardSplitView from "@/components/dashboard/DashboardSplitView.svelte";
 import { EditableTask } from "@/vendor/obsidian-tasks/ui/EditableTask";
 import type { Task } from "@/core/models/Task";
 import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
@@ -26,6 +27,7 @@ import { TaskDraftAdapter } from "@/adapters/TaskDraftAdapter";
 import { StatusRegistry } from "@/vendor/obsidian-tasks/types/Status";
 import { pluginEventBus } from "@/core/events/PluginEventBus";
 import { toast } from "@/utils/notifications";
+import type { Task as ObsidianTask } from "@/vendor/obsidian-tasks/types/Task";
 
 export interface RecurringDashboardViewProps {
   repository: TaskRepositoryProvider;
@@ -41,6 +43,7 @@ export interface RecurringDashboardViewProps {
 export class RecurringDashboardView {
   private editorComponent: ReturnType<typeof mount> | null = null;
   private listComponent: ReturnType<typeof mount> | null = null;
+  private component: ReturnType<typeof mount> | null = null; // For split-view
   private container: HTMLElement;
   private props: RecurringDashboardViewProps;
   private currentTask?: Task;
@@ -59,7 +62,7 @@ export class RecurringDashboardView {
    * Mount the dashboard view with full feature support and error boundary
    */
   mount(initialTask?: Task): void {
-    if (this.editorComponent) {
+    if (this.editorComponent || this.component) {
       return;
     }
 
@@ -75,32 +78,133 @@ export class RecurringDashboardView {
       // Set loading state AFTER clearing container
       this.setLoading(true);
       
-      // Create split-view container
-      const splitContainer = document.createElement("div");
-      splitContainer.className = "recurring-dashboard-container";
-      this.container.appendChild(splitContainer);
-
-      // Left panel: Task list
-      const listPanel = document.createElement("div");
-      listPanel.className = "recurring-dashboard-list";
-      splitContainer.appendChild(listPanel);
-
-      // Right panel: EditTask editor
-      const editorPanel = document.createElement("div");
-      editorPanel.className = "recurring-dashboard-editor";
-      splitContainer.appendChild(editorPanel);
-
-      // Mount task list
-      this.mountTaskList(listPanel);
-
-      // Mount editor
-      this.mountEditor(editorPanel);
+      // Get settings to determine which dashboard to use
+      const settings = this.props.settingsService.get();
+      
+      // Feature flag: Use split-view if enabled
+      if (settings.splitViewDashboard?.useSplitViewDashboard) {
+        this.mountSplitView(initialTask);
+      } else {
+        this.mountLegacyDashboard(initialTask);
+      }
 
       this.isMounted = true;
       this.setLoading(false);
     } catch (error) {
       this.handleMountError(error);
     }
+  }
+
+  /**
+   * NEW: Mount split-view dashboard
+   */
+  private mountSplitView(initialTask?: Task): void {
+    const allTasks = this.getAllTasks();
+    const obsidianTasks = allTasks.map(task => 
+      TaskDraftAdapter.toObsidianTaskStub(task)
+    );
+
+    this.component = mount(DashboardSplitView, {
+      target: this.container,
+      props: {
+        tasks: obsidianTasks,
+        statusOptions: this.getStatusOptions(),
+        initialTaskId: initialTask?.id,
+        onTaskSaved: this.handleTaskSaved.bind(this),
+        onNewTask: this.handleNewTaskCreation.bind(this),
+      },
+    });
+  }
+
+  /**
+   * LEGACY: Keep existing dashboard for backward compatibility
+   */
+  private mountLegacyDashboard(initialTask?: Task): void {
+    // Create split-view container
+    const splitContainer = document.createElement("div");
+    splitContainer.className = "recurring-dashboard-container";
+    this.container.appendChild(splitContainer);
+
+    // Left panel: Task list
+    const listPanel = document.createElement("div");
+    listPanel.className = "recurring-dashboard-list";
+    splitContainer.appendChild(listPanel);
+
+    // Right panel: EditTask editor
+    const editorPanel = document.createElement("div");
+    editorPanel.className = "recurring-dashboard-editor";
+    splitContainer.appendChild(editorPanel);
+
+    // Mount task list
+    this.mountTaskList(listPanel);
+
+    // Mount editor
+    this.mountEditor(editorPanel);
+  }
+
+  /**
+   * Handle task save from split-view
+   */
+  private async handleTaskSaved(updatedTask: ObsidianTask): Promise<void> {
+    try {
+      // Convert from Obsidian format back to internal format
+      const allTasks = this.getAllTasks();
+      const allObsidianTasks = allTasks.map(t => TaskDraftAdapter.toObsidianTaskStub(t));
+      const editableTask = EditableTask.fromTask(updatedTask, allObsidianTasks);
+      
+      // Find the original task to preserve existing data
+      const originalTask = allTasks.find(t => t.id === updatedTask.id);
+      
+      // Convert EditableTask to Recurring Task using adapter
+      const recurringTask = TaskDraftAdapter.fromEditableTask(
+        editableTask,
+        originalTask
+      );
+
+      // Validate recurrence logic with RecurrenceEngine if frequency is set
+      if (recurringTask.frequency) {
+        try {
+          const nextOccurrence = this.props.recurrenceEngine.calculateNext(
+            new Date(recurringTask.dueAt),
+            recurringTask.frequency
+          );
+          
+          if (!nextOccurrence) {
+            toast.error('Invalid recurrence rule: cannot calculate next occurrence');
+            return;
+          }
+        } catch (error) {
+          toast.error('Invalid recurrence rule: ' + (error instanceof Error ? error.message : String(error)));
+          return;
+        }
+      }
+      
+      // Save to repository
+      await this.props.repository.saveTask(recurringTask);
+      
+      // Show success notification
+      toast.success('Task saved successfully');
+      
+      // Update current task
+      this.currentTask = recurringTask;
+      
+      // Emit success event
+      pluginEventBus.emit('task:saved', { 
+        task: recurringTask,
+        isNew: !originalTask 
+      });
+    } catch (error) {
+      console.error('Failed to save task:', error);
+      toast.error('Failed to save task: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  }
+
+  /**
+   * Handle new task creation from split-view
+   */
+  private handleNewTaskCreation(): void {
+    this.currentTask = undefined;
+    // In split-view, we don't need to refresh - the component handles it
   }
 
   /**
@@ -295,6 +399,10 @@ export class RecurringDashboardView {
    */
   unmount(): void {
     try {
+      if (this.component) {
+        unmount(this.component);
+        this.component = null;
+      }
       if (this.editorComponent) {
         unmount(this.editorComponent);
         this.editorComponent = null;
@@ -309,6 +417,7 @@ export class RecurringDashboardView {
     } catch (error) {
       console.error('Error during dashboard unmount:', error);
       // Continue cleanup even if unmount fails
+      this.component = null;
       this.editorComponent = null;
       this.listComponent = null;
       this.isMounted = false;
