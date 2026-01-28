@@ -1,5 +1,20 @@
 /**
- * Task Draft Adapter
+ * @deprecated This adapter is DEPRECATED in favor of the main TaskDraftAdapter at src/adapters/TaskDraftAdapter.ts
+ * 
+ * This file exists for backward compatibility only. The dashboard now uses the Obsidian-Tasks
+ * EditTask component with the main TaskDraftAdapter for all conversions.
+ * 
+ * Migration path:
+ * - Use src/adapters/TaskDraftAdapter.ts for all new code
+ * - This adapter converts between TaskDraft and Task models
+ * - The main adapter converts between EditableTask (Obsidian-Tasks) and RecurringTask
+ * 
+ * @see {@link /src/adapters/TaskDraftAdapter.ts} - Main adapter for EditableTask ↔ RecurringTask
+ * @see {@link /src/vendor/obsidian-tasks/ui/EditTask.svelte} - Current dashboard UI component
+ * 
+ * ---
+ * 
+ * Task Draft Adapter (LEGACY)
  * 
  * Converts between UI state (TaskDraft) and business model (Task).
  * This adapter layer ensures separation of concerns between the presentation
