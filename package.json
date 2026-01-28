@@ -24,7 +24,9 @@
   "dependencies": {
     "chrono-node": "^2.9.0",
     "rrule": "^2.8.1",
-    "minimatch": "^9.0.3"
+    "minimatch": "^9.0.3",
+    "moment": "^2.29.4",
+    "flatpickr": "^4.6.13"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
@@ -41,6 +43,8 @@
     "vite-plugin-static-copy": "^1.0.6",
     "vite-plugin-zip-pack": "^1.2.4",
     "vitest": "^1.6.0",
-    "@types/minimatch": "^5.1.2"
+    "@types/minimatch": "^5.1.2",
+    "@types/moment": "^2.13.0",
+    "@types/flatpickr": "^3.1.2"
   }
 }

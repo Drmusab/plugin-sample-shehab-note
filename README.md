@@ -82,6 +82,21 @@ See [Natural Language Dates Documentation](docs/NATURAL_LANGUAGE_DATES.md) for c
 
 See [AI Features Documentation](docs/AI_FEATURES.md) for detailed information.
 
+### 🏗️ Dashboard Architecture (NEW)
+
+The plugin features a modern, well-architected dashboard system with clear separation of concerns:
+
+- **Adapter Layer** - Type-safe data transformation between UI and business logic
+- **Validation Layer** - Robust input validation before persistence
+- **Persistent Dashboard** - Always-available sidebar interface for quick task creation
+- **Comprehensive Testing** - 59 unit and integration tests for adapters, validators, and dashboard
+
+**Documentation:**
+- [Architecture Diagram](docs/integration/architecture-diagram.md) - System architecture overview
+- [Data Flow](docs/integration/data-flow.md) - How data moves through the system
+- [Field Mapping](docs/integration/field-mapping.md) - Complete field reference
+- [Migration Guide](docs/integration/migration-guide.md) - Upgrade guide for users
+
 ### 🔔 Multi-Channel Notifications
 - **n8n** - Webhook integration for workflow automation
 - **Telegram** - Direct messaging via Telegram Bot API

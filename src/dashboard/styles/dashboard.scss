@@ -1,0 +1,57 @@
+/**
+ * Recurring Dashboard Styles
+ * 
+ * Styles for the persistent dashboard view that hosts the task editor.
+ */
+
+.recurring-dashboard-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  overflow-y: auto;
+  background-color: var(--b3-theme-background);
+  color: var(--b3-theme-on-background);
+}
+
+.recurring-dashboard-wrapper .task-editor-modal {
+  /* Remove modal-specific styles when used in dashboard */
+  box-shadow: none;
+  border-radius: 0;
+  max-width: none;
+  width: 100%;
+}
+
+.recurring-dashboard-wrapper .modal-header {
+  /* Adjust header for dashboard context */
+  border-bottom: 1px solid var(--b3-border-color);
+  margin-bottom: 16px;
+}
+
+.recurring-dashboard-wrapper .form-section {
+  margin-bottom: 20px;
+}
+
+.recurring-dashboard-wrapper .form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--b3-border-color);
+}
+
+/* Responsive adjustments for narrow sidebars */
+@media (max-width: 600px) {
+  .recurring-dashboard-wrapper {
+    padding: 12px;
+  }
+
+  .recurring-dashboard-wrapper .form-actions {
+    flex-direction: column;
+  }
+
+  .recurring-dashboard-wrapper .form-actions button {
+    width: 100%;
+  }
+}
