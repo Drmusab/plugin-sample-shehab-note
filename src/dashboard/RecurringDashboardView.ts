@@ -65,18 +65,7 @@ export class RecurringDashboardView {
       : TaskDraftAdapter.createEmptyEditableTask();
 
     // Convert all tasks to Obsidian format for the UI
-    const allObsidianTasks = allTasks.map(t => {
-      const stub: any = {
-        description: t.name,
-        id: t.id,
-        status: TaskDraftAdapter['mapStatusToObsidian'](t.status),
-        priority: TaskDraftAdapter['mapPriorityToObsidianEnum'](t.priority),
-        dueDate: TaskDraftAdapter.formatDateForUI(t.dueAt),
-        path: t.path || '',
-        dependsOn: t.blockedBy || t.dependsOn || [],
-      };
-      return stub;
-    });
+    const allObsidianTasks = allTasks.map(t => TaskDraftAdapter.toObsidianTaskStub(t));
 
     // Mount the Obsidian-Tasks EditTask component
     this.component = mount(EditTask, {

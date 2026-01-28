@@ -142,7 +142,8 @@ export class TaskDraftAdapter {
           throw new Error('Invalid recurrence rule format');
         }
       } catch (e) {
-        throw new Error(`Invalid recurrence rule: ${e.message}`);
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        throw new Error(`Invalid recurrence rule: ${errorMessage}`);
       }
     }
 
@@ -165,7 +166,7 @@ export class TaskDraftAdapter {
   /**
    * Map Obsidian Status → Recurring status string
    */
-  static mapStatusToRecurring(status: Status): 'todo' | 'done' | 'cancelled' {
+  public static mapStatusToRecurring(status: Status): 'todo' | 'done' | 'cancelled' {
     if (status.type === 'DONE') return 'done';
     if (status.type === 'CANCELLED') return 'cancelled';
     return 'todo'; // Default to TODO for in-progress, etc.
@@ -174,7 +175,7 @@ export class TaskDraftAdapter {
   /**
    * Map Recurring status → Obsidian Status object
    */
-  static mapStatusToObsidian(status?: string): Status {
+  public static mapStatusToObsidian(status?: string): Status {
     switch (status) {
       case 'done':
         return new StatusImpl('x', 'Done', 'DONE');
@@ -188,7 +189,7 @@ export class TaskDraftAdapter {
   /**
    * Map Obsidian priority string → Recurring priority
    */
-  static mapPriorityToRecurring(priority: string): TaskPriority {
+  public static mapPriorityToRecurring(priority: string): TaskPriority {
     const normalized = priority.toLowerCase();
     switch (normalized) {
       case 'highest':
@@ -211,7 +212,7 @@ export class TaskDraftAdapter {
   /**
    * Map Recurring priority → Obsidian priority string
    */
-  static mapPriorityToObsidian(priority?: TaskPriority): string {
+  public static mapPriorityToObsidian(priority?: TaskPriority): string {
     if (!priority || priority === 'normal') return 'none';
     return priority;
   }
@@ -219,7 +220,7 @@ export class TaskDraftAdapter {
   /**
    * Map Recurring priority → Obsidian Priority enum
    */
-  static mapPriorityToObsidianEnum(priority?: TaskPriority): Priority {
+  public static mapPriorityToObsidianEnum(priority?: TaskPriority): Priority {
     switch (priority) {
       case 'highest':
         return Priority.Highest;
@@ -244,7 +245,7 @@ export class TaskDraftAdapter {
   /**
    * Parse user-friendly date input → ISO 8601
    */
-  static parseDate(dateString: string | null | undefined): string | undefined {
+  public static parseDate(dateString: string | null | undefined): string | undefined {
     if (!dateString || dateString.trim() === '') {
       return undefined;
     }
@@ -263,7 +264,7 @@ export class TaskDraftAdapter {
   /**
    * Convert ISO timestamp → date string for UI input
    */
-  static formatDateForUI(isoTimestamp?: string): string {
+  public static formatDateForUI(isoTimestamp?: string): string {
     if (!isoTimestamp) return '';
     try {
       return new Date(isoTimestamp).toISOString().split('T')[0]; // YYYY-MM-DD
@@ -275,7 +276,7 @@ export class TaskDraftAdapter {
   /**
    * Check if date string is valid
    */
-  static isValidDateString(dateString: string): boolean {
+  public static isValidDateString(dateString: string): boolean {
     if (!dateString) return false;
     const date = new Date(dateString);
     return !isNaN(date.getTime());
@@ -288,7 +289,7 @@ export class TaskDraftAdapter {
   /**
    * Convert Frequency → RRule string (for Obsidian UI)
    */
-  static frequencyToRRule(frequency?: Frequency): string | null {
+  public static frequencyToRRule(frequency?: Frequency): string | null {
     if (!frequency) return null;
 
     const { type, interval = 1 } = frequency;
@@ -332,7 +333,7 @@ export class TaskDraftAdapter {
   /**
    * Convert RRule string → Frequency (for storage)
    */
-  static rRuleToFrequency(rrule: string | null | undefined): Frequency {
+  public static rRuleToFrequency(rrule: string | null | undefined): Frequency {
     if (!rrule || rrule.trim() === '') {
       // Default to daily if no recurrence specified
       return {
@@ -415,9 +416,10 @@ export class TaskDraftAdapter {
 
   /**
    * Helper: Convert weekday number to string
+   * Note: This codebase uses 0=Monday convention, not JavaScript's 0=Sunday
    */
   private static weekdayToString(weekday: number): string {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     return days[weekday] || 'Monday';
   }
 
@@ -434,18 +436,21 @@ export class TaskDraftAdapter {
 
   /**
    * Helper: Extract weekdays from text
+   * Note: Returns weekdays in 0=Monday convention
    */
   private static extractWeekdays(text: string): number[] {
     const weekdays: number[] = [];
     const lower = text.toLowerCase();
     
-    if (lower.includes('monday') || lower.includes('mo')) weekdays.push(1);
-    if (lower.includes('tuesday') || lower.includes('tu')) weekdays.push(2);
-    if (lower.includes('wednesday') || lower.includes('we')) weekdays.push(3);
-    if (lower.includes('thursday') || lower.includes('th')) weekdays.push(4);
-    if (lower.includes('friday') || lower.includes('fr')) weekdays.push(5);
-    if (lower.includes('saturday') || lower.includes('sa')) weekdays.push(6);
-    if (lower.includes('sunday') || lower.includes('su')) weekdays.push(0);
+    // Use more specific patterns to avoid ambiguity
+    // Check full day names first, then abbreviations with word boundaries
+    if (lower.match(/\bmonday\b/)) weekdays.push(0);
+    if (lower.match(/\btuesday\b/)) weekdays.push(1);
+    if (lower.match(/\bwednesday\b/)) weekdays.push(2);
+    if (lower.match(/\bthursday\b/)) weekdays.push(3);
+    if (lower.match(/\bfriday\b/)) weekdays.push(4);
+    if (lower.match(/\bsaturday\b/)) weekdays.push(5);
+    if (lower.match(/\bsunday\b/)) weekdays.push(6);
     
     return weekdays;
   }
@@ -462,15 +467,27 @@ export class TaskDraftAdapter {
     ];
     
     let month = 0;
+    let monthIndex = -1;
     for (let i = 0; i < months.length; i++) {
-      if (lower.includes(months[i])) {
+      const index = lower.indexOf(months[i]);
+      if (index !== -1) {
         month = i;
+        monthIndex = index;
         break;
       }
     }
     
-    const dayMatch = text.match(/(\d+)/);
-    const day = dayMatch ? parseInt(dayMatch[1]) : 1;
+    // Extract the day number that appears after the month name
+    let day = 1;
+    if (monthIndex !== -1) {
+      const afterMonth = text.substring(monthIndex);
+      const dayMatch = afterMonth.match(/\b(\d+)\b/);
+      day = dayMatch ? parseInt(dayMatch[1]) : 1;
+    } else {
+      // If no month found, just get the first number
+      const dayMatch = text.match(/\b(\d+)\b/);
+      day = dayMatch ? parseInt(dayMatch[1]) : 1;
+    }
     
     return { month, day };
   }
@@ -523,7 +540,7 @@ export class TaskDraftAdapter {
   /**
    * Convert Task object array → ID array
    */
-  static mapDependenciesToIds(tasks: ObsidianTask[]): string[] {
+  public static mapDependenciesToIds(tasks: ObsidianTask[]): string[] {
     return tasks.map(t => t.id).filter(id => id && id !== '');
   }
 
@@ -532,7 +549,7 @@ export class TaskDraftAdapter {
    * @param ids - Task IDs from recurring task
    * @param allTasks - Full task list for lookup
    */
-  static mapIdsToTasks(
+  public static mapIdsToTasks(
     ids: string[],
     allTasks: RecurringTask[]
   ): ObsidianTask[] {
@@ -549,7 +566,7 @@ export class TaskDraftAdapter {
   /**
    * Convert a recurring task to an Obsidian task stub (for EditableTask compatibility)
    */
-  private static toObsidianTaskStub(task: RecurringTask): ObsidianTask {
+  public static toObsidianTaskStub(task: RecurringTask): ObsidianTask {
     return {
       description: task.name,
       status: this.mapStatusToObsidian(task.status),
