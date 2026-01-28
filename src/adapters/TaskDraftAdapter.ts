@@ -4,6 +4,26 @@
  * - Recurring plugin domain models (Task)
  * 
  * This adapter is the critical isolation layer that prevents UI logic from contaminating business logic.
+ * It handles all conversions, validations, and edge cases to ensure data integrity across boundaries.
+ * 
+ * @module TaskDraftAdapter
+ * 
+ * @example
+ * // Convert recurring task to editable format for UI
+ * const editableTask = TaskDraftAdapter.toEditableTask(recurringTask, allTasks);
+ * 
+ * @example
+ * // Convert UI data back to recurring task for storage
+ * const recurringTask = TaskDraftAdapter.fromEditableTask(editableTask, originalTask);
+ * 
+ * @example
+ * // Validate before conversion
+ * try {
+ *   TaskDraftAdapter.validate(editableTask);
+ *   const task = TaskDraftAdapter.fromEditableTask(editableTask);
+ * } catch (error) {
+ *   console.error('Validation failed:', error.message);
+ * }
  */
 
 import type { Task as RecurringTask } from '@/core/models/Task';
@@ -16,15 +36,36 @@ import { StatusImpl, StatusRegistry, StatusType } from '@/vendor/obsidian-tasks/
 import { Priority } from '@/vendor/obsidian-tasks/types/Task';
 import { GlobalFilter } from '@/vendor/obsidian-tasks/shims/ObsidianShim';
 
+/**
+ * Adapter for converting between Obsidian-Tasks EditableTask and Recurring plugin Task models.
+ * 
+ * This class provides type-safe, lossless bidirectional conversion with comprehensive
+ * error handling and validation.
+ */
 export class TaskDraftAdapter {
   /**
-   * Convert Recurring Task → Obsidian EditableTask (for UI display)
-   * This is called when opening the task editor
+   * Convert a RecurringTask to an EditableTask for display in the UI.
+   * 
+   * This method is called when opening the task editor to display an existing task
+   * or when refreshing the UI after a save operation.
+   * 
+   * @param recurringTask - The recurring task to convert
+   * @param allTasks - Complete list of all tasks (needed for dependency resolution)
+   * @returns EditableTask instance ready for UI binding
+   * 
+   * @throws {Error} If recurringTask is null or undefined
+   * 
+   * @example
+   * const editableTask = TaskDraftAdapter.toEditableTask(task, repository.getAllTasks());
    */
   static toEditableTask(
     recurringTask: RecurringTask,
     allTasks: RecurringTask[]
   ): EditableTask {
+    if (!recurringTask) {
+      throw new Error('Cannot convert null or undefined task to EditableTask');
+    }
+
     // Convert all recurring tasks to obsidian tasks for dependency lookup
     const allObsidianTasks = allTasks.map(t => this.toObsidianTaskStub(t));
     
@@ -36,13 +77,33 @@ export class TaskDraftAdapter {
   }
 
   /**
-   * Convert Obsidian EditableTask → Recurring Task (for storage)
-   * This is called when user clicks "Apply" in the editor
+   * Convert an EditableTask to a RecurringTask for storage.
+   * 
+   * This method is called when the user clicks "Apply" in the editor.
+   * It performs the reverse conversion with validation and enrichment.
+   * 
+   * @param editableTask - The editable task from the UI
+   * @param originalTask - Optional original task for preserving metadata (for updates)
+   * @returns RecurringTask ready for storage
+   * 
+   * @throws {Error} If editableTask is null or undefined
+   * @throws {Error} If required fields are missing or invalid
+   * 
+   * @example
+   * // Creating a new task
+   * const newTask = TaskDraftAdapter.fromEditableTask(editableTask);
+   * 
+   * @example
+   * // Updating an existing task
+   * const updatedTask = TaskDraftAdapter.fromEditableTask(editableTask, originalTask);
    */
   static fromEditableTask(
     editableTask: EditableTask,
     originalTask?: RecurringTask
   ): RecurringTask {
+    if (!editableTask) {
+      throw new Error('Cannot convert null or undefined EditableTask to RecurringTask');
+    }
     const now = new Date().toISOString();
     
     // Remove global filter from description
@@ -101,7 +162,15 @@ export class TaskDraftAdapter {
   }
 
   /**
-   * Create an empty EditableTask for new task creation
+   * Create an empty EditableTask for new task creation.
+   * 
+   * This is used when the user wants to create a new task from scratch.
+   * All fields are initialized with sensible defaults.
+   * 
+   * @returns A new EditableTask with default values
+   * 
+   * @example
+   * const emptyTask = TaskDraftAdapter.createEmptyEditableTask();
    */
   static createEmptyEditableTask(): EditableTask {
     const emptyTask: ObsidianTask = {
@@ -125,8 +194,26 @@ export class TaskDraftAdapter {
   }
 
   /**
-   * Validate EditableTask before conversion
-   * @throws Error if validation fails
+   * Validate an EditableTask before conversion to RecurringTask.
+   * 
+   * This method performs comprehensive validation of all fields:
+   * - Required fields (description)
+   * - Date formats and constraints
+   * - Recurrence rule validity
+   * - Edge cases (infinite recurrence, invalid intervals)
+   * 
+   * @param editableTask - The editable task to validate
+   * 
+   * @throws {Error} If validation fails with a descriptive error message
+   * 
+   * @example
+   * try {
+   *   TaskDraftAdapter.validate(editableTask);
+   *   // Validation passed, safe to convert
+   * } catch (error) {
+   *   // Show error to user
+   *   toast.error(error.message);
+   * }
    */
   static validate(editableTask: EditableTask): void {
     // Check required fields
@@ -140,6 +227,16 @@ export class TaskDraftAdapter {
         const frequency = this.rRuleToFrequency(editableTask.recurrenceRule);
         if (!this.isValidFrequency(frequency)) {
           throw new Error('Invalid recurrence rule format');
+        }
+        
+        // Check for zero interval edge case (should be caught by isValidFrequency, but double-check)
+        if (frequency.interval === 0) {
+          throw new Error('Recurrence interval cannot be zero');
+        }
+        
+        // Check for unreasonably large intervals
+        if (frequency.interval > 1000) {
+          throw new Error('Recurrence interval is too large (max: 1000)');
         }
       } catch (e) {
         const errorMessage = e instanceof Error ? e.message : String(e);
@@ -157,6 +254,23 @@ export class TaskDraftAdapter {
     if (editableTask.scheduledDate && !this.isValidDateString(editableTask.scheduledDate)) {
       throw new Error('Invalid scheduled date format');
     }
+    
+    // Validate date ordering
+    if (editableTask.startDate && editableTask.dueDate) {
+      const startDate = new Date(editableTask.startDate);
+      const dueDate = new Date(editableTask.dueDate);
+      if (startDate > dueDate) {
+        throw new Error('Start date cannot be after due date');
+      }
+    }
+    
+    if (editableTask.scheduledDate && editableTask.dueDate) {
+      const scheduledDate = new Date(editableTask.scheduledDate);
+      const dueDate = new Date(editableTask.dueDate);
+      if (scheduledDate > dueDate) {
+        throw new Error('Scheduled date cannot be after due date');
+      }
+    }
   }
 
   // ============================================================================
@@ -164,7 +278,17 @@ export class TaskDraftAdapter {
   // ============================================================================
 
   /**
-   * Map Obsidian Status → Recurring status string
+   * Map Obsidian Status → Recurring status string.
+   * 
+   * Converts the Obsidian-Tasks Status object to a simple string status
+   * compatible with the recurring task system.
+   * 
+   * @param status - Obsidian status object
+   * @returns 'todo', 'done', or 'cancelled'
+   * 
+   * @example
+   * const status = new StatusImpl('x', 'Done', 'DONE');
+   * TaskDraftAdapter.mapStatusToRecurring(status); // 'done'
    */
   public static mapStatusToRecurring(status: Status): 'todo' | 'done' | 'cancelled' {
     if (status.type === 'DONE') return 'done';
@@ -173,7 +297,16 @@ export class TaskDraftAdapter {
   }
 
   /**
-   * Map Recurring status → Obsidian Status object
+   * Map Recurring status → Obsidian Status object.
+   * 
+   * Creates an Obsidian-Tasks Status object from a simple string status.
+   * 
+   * @param status - String status ('todo', 'done', 'cancelled', or undefined)
+   * @returns Obsidian Status object
+   * 
+   * @example
+   * TaskDraftAdapter.mapStatusToObsidian('done'); 
+   * // Returns: StatusImpl { symbol: 'x', name: 'Done', type: 'DONE' }
    */
   public static mapStatusToObsidian(status?: string): Status {
     switch (status) {
@@ -187,7 +320,17 @@ export class TaskDraftAdapter {
   }
 
   /**
-   * Map Obsidian priority string → Recurring priority
+   * Map Obsidian priority string → Recurring priority.
+   * 
+   * Converts priority strings from the UI to the recurring task priority type.
+   * Handles various input formats and normalizes to standard priority values.
+   * 
+   * @param priority - Priority string from Obsidian UI
+   * @returns Standardized TaskPriority value
+   * 
+   * @example
+   * TaskDraftAdapter.mapPriorityToRecurring('highest'); // 'highest'
+   * TaskDraftAdapter.mapPriorityToRecurring('none'); // 'normal'
    */
   public static mapPriorityToRecurring(priority: string): TaskPriority {
     const normalized = priority.toLowerCase();

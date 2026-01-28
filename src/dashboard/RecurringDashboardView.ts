@@ -4,6 +4,12 @@
  * This view provides a persistent dashboard for managing recurring tasks.
  * It mounts the Obsidian-Tasks EditTask component in a persistent sidebar view
  * instead of as a modal dialog.
+ * 
+ * Features:
+ * - Error boundaries for robust component mounting
+ * - Loading state indicators
+ * - Proper cleanup on unmount
+ * - Event-driven architecture
  */
 
 import { mount, unmount } from "svelte";
@@ -28,13 +34,15 @@ export interface RecurringDashboardViewProps {
 }
 
 /**
- * Dashboard view that mounts Obsidian-Tasks EditTask component
+ * Dashboard view that mounts Obsidian-Tasks EditTask component with error handling
  */
 export class RecurringDashboardView {
   private component: ReturnType<typeof mount> | null = null;
   private container: HTMLElement;
   private props: RecurringDashboardViewProps;
   private currentTask?: Task;
+  private isLoading: boolean = false;
+  private isMounted: boolean = false;
 
   constructor(
     container: HTMLElement,
@@ -45,49 +53,59 @@ export class RecurringDashboardView {
   }
 
   /**
-   * Mount the dashboard view with full feature support
+   * Mount the dashboard view with full feature support and error boundary
    */
   mount(initialTask?: Task): void {
     if (this.component) {
       return;
     }
 
-    // Set current task if provided
-    if (initialTask) {
-      this.currentTask = initialTask;
+    try {
+      // Set current task if provided
+      if (initialTask) {
+        this.currentTask = initialTask;
+      }
+
+      // Clear container
+      this.container.innerHTML = "";
+      
+      // Set loading state AFTER clearing container
+      this.setLoading(true);
+      
+      // Create wrapper with proper styling
+      const wrapper = document.createElement("div");
+      wrapper.className = "recurring-dashboard-wrapper tasks-modal";
+      this.container.appendChild(wrapper);
+
+      // Get all tasks for dependency resolution
+      const allTasks = this.getAllTasks();
+
+      // Convert task using TaskDraftAdapter - EditTask expects Task, not EditableTask
+      const obsidianTask = this.currentTask
+        ? TaskDraftAdapter.toObsidianTaskStub(this.currentTask)
+        : TaskDraftAdapter.toObsidianTaskStub(this.createEmptyTask());
+
+      // Convert all tasks to Obsidian format for the UI
+      const allObsidianTasks = allTasks.map(task => 
+        TaskDraftAdapter.toObsidianTaskStub(task)
+      );
+
+      // Mount EditTask component with error boundary
+      this.component = mount(EditTask, {
+        target: wrapper,
+        props: {
+          task: obsidianTask,
+          statusOptions: this.getStatusOptions(),
+          allTasks: allObsidianTasks,
+          onSubmit: this.handleSubmit.bind(this),
+        },
+      });
+
+      this.isMounted = true;
+      this.setLoading(false);
+    } catch (error) {
+      this.handleMountError(error);
     }
-
-    // Clear container
-    this.container.innerHTML = "";
-    
-    // Create wrapper with proper styling
-    const wrapper = document.createElement("div");
-    wrapper.className = "recurring-dashboard-wrapper tasks-modal";
-    this.container.appendChild(wrapper);
-
-    // Get all tasks for dependency resolution
-    const allTasks = this.getAllTasks();
-
-    // Convert task using TaskDraftAdapter - EditTask expects Task, not EditableTask
-    const obsidianTask = this.currentTask
-      ? TaskDraftAdapter.toObsidianTaskStub(this.currentTask)
-      : TaskDraftAdapter.toObsidianTaskStub(this.createEmptyTask());
-
-    // Convert all tasks to Obsidian format for the UI
-    const allObsidianTasks = allTasks.map(task => 
-      TaskDraftAdapter.toObsidianTaskStub(task)
-    );
-
-    // Mount EditTask component
-    this.component = mount(EditTask, {
-      target: wrapper,
-      props: {
-        task: obsidianTask,
-        statusOptions: this.getStatusOptions(),
-        allTasks: allObsidianTasks,
-        onSubmit: this.handleSubmit.bind(this),
-      },
-    });
   }
 
   /**
@@ -211,14 +229,24 @@ export class RecurringDashboardView {
   }
 
   /**
-   * Unmount the dashboard view
+   * Unmount the dashboard view with proper cleanup
    */
   unmount(): void {
-    if (this.component) {
-      unmount(this.component);
+    try {
+      if (this.component) {
+        unmount(this.component);
+        this.component = null;
+      }
+      this.container.replaceChildren();
+      this.isMounted = false;
+      this.isLoading = false;
+    } catch (error) {
+      console.error('Error during dashboard unmount:', error);
+      // Continue cleanup even if unmount fails
       this.component = null;
+      this.isMounted = false;
+      this.isLoading = false;
     }
-    this.container.replaceChildren();
   }
 
   /**
@@ -253,5 +281,73 @@ export class RecurringDashboardView {
     } else {
       this.refresh();
     }
+  }
+
+  /**
+   * Set loading state and update UI
+   */
+  private setLoading(loading: boolean): void {
+    this.isLoading = loading;
+    
+    if (loading) {
+      // Show loading indicator
+      const loadingDiv = document.createElement('div');
+      loadingDiv.className = 'recurring-dashboard-loading';
+      loadingDiv.innerHTML = `
+        <div class="spinner"></div>
+        <p>Loading task editor...</p>
+      `;
+      this.container.appendChild(loadingDiv);
+    } else {
+      // Remove loading indicator
+      const loadingDiv = this.container.querySelector('.recurring-dashboard-loading');
+      if (loadingDiv) {
+        loadingDiv.remove();
+      }
+    }
+  }
+
+  /**
+   * Handle component mounting errors with graceful degradation
+   */
+  private handleMountError(error: unknown): void {
+    this.isLoading = false;
+    this.isMounted = false;
+    
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Failed to mount dashboard component:', error);
+    
+    // Show error message in UI - use textContent for XSS safety
+    const errorContainer = document.createElement('div');
+    errorContainer.className = 'recurring-dashboard-error';
+    
+    const errorIcon = document.createElement('div');
+    errorIcon.className = 'error-icon';
+    errorIcon.textContent = '⚠️';
+    
+    const errorTitle = document.createElement('h3');
+    errorTitle.textContent = 'Failed to Load Task Editor';
+    
+    const errorText = document.createElement('p');
+    errorText.textContent = errorMessage;
+    
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'error-retry-btn';
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', () => {
+      this.container.innerHTML = '';
+      this.mount(this.currentTask);
+    });
+    
+    errorContainer.appendChild(errorIcon);
+    errorContainer.appendChild(errorTitle);
+    errorContainer.appendChild(errorText);
+    errorContainer.appendChild(retryBtn);
+    
+    this.container.innerHTML = '';
+    this.container.appendChild(errorContainer);
+    
+    // Also show toast notification
+    toast.error(`Dashboard error: ${errorMessage}`);
   }
 }
