@@ -1,0 +1,42 @@
+/**
+ * Split-View Dashboard Styles (Global)
+ * 
+ * Global styles for the split-view dashboard layout.
+ * Note: Component-specific styles are also defined in DashboardSplitView.svelte
+ * using scoped <style> blocks. This file provides global overrides if needed.
+ */
+
+/* Root split-view container */
+.dashboard-split-view {
+  display: grid;
+  grid-template-columns: 40% 60%;
+  gap: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--background-primary);
+}
+
+/* Responsive Breakpoints */
+
+/* Tablet: Adjust proportions */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .dashboard-split-view {
+    grid-template-columns: 35% 65%;
+  }
+}
+
+/* Mobile: Stacked layout */
+@media (max-width: 768px) {
+  .dashboard-split-view {
+    grid-template-columns: 1fr;
+    grid-template-rows: 300px 1fr;
+  }
+}
+
+/* Large desktop: Wider task list */
+@media (min-width: 1400px) {
+  .dashboard-split-view {
+    grid-template-columns: 45% 55%;
+  }
+}
