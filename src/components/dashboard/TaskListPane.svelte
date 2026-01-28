@@ -2,7 +2,6 @@
   import TaskRow from './TaskRow.svelte';
   import type { Task } from '@/vendor/obsidian-tasks/types/Task';
   import { onMount, onDestroy } from 'svelte';
-  import { isToday, isUpcoming, isOverdue } from './utils';
   import { clearSelection } from '@/stores/selectedTask';
   
   export let tasks: Task[];
@@ -10,44 +9,13 @@
   export let onTaskSelect: (task: Task) => void;
   export let onNewTask: () => void;
   
-  type FilterType = 'all' | 'today' | 'upcoming' | 'recurring' | 'overdue';
-  
-  let filter: FilterType = 'all';
   let focusIndex = 0;
   let taskRowsContainer: HTMLElement;
   let containerElement: HTMLElement;
   
-  // Filter tasks based on selected filter
-  $: filteredTasks = filterTasks(tasks, filter);
-  
-  // Calculate task counts for each filter
-  $: taskCounts = {
-    all: tasks.length,
-    today: tasks.filter(t => isToday(t.dueDate)).length,
-    upcoming: tasks.filter(t => isUpcoming(t.dueDate)).length,
-    recurring: tasks.filter(t => t.recurrence).length,
-    overdue: tasks.filter(t => isOverdue(t.dueDate)).length,
-  };
-  
-  // Reset focus index when filter changes
-  $: if (filter) {
+  // Reset focus index when tasks change
+  $: if (tasks) {
     focusIndex = 0;
-  }
-  
-  function filterTasks(tasks: Task[], filter: FilterType): Task[] {
-    switch (filter) {
-      case 'today':
-        return tasks.filter(t => isToday(t.dueDate));
-      case 'upcoming':
-        return tasks.filter(t => isUpcoming(t.dueDate));
-      case 'recurring':
-        return tasks.filter(t => t.recurrence);
-      case 'overdue':
-        return tasks.filter(t => isOverdue(t.dueDate));
-      case 'all':
-      default:
-        return tasks;
-    }
   }
   
   function handleKeydown(e: KeyboardEvent) {
@@ -56,12 +24,12 @@
       return;
     }
     
-    if (filteredTasks.length === 0) return;
+    if (tasks.length === 0) return;
     
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        focusIndex = Math.min(focusIndex + 1, filteredTasks.length - 1);
+        focusIndex = Math.min(focusIndex + 1, tasks.length - 1);
         scrollToIndex(focusIndex);
         focusTaskAtIndex(focusIndex);
         break;
@@ -75,8 +43,8 @@
       
       case 'Enter':
         e.preventDefault();
-        if (filteredTasks[focusIndex]) {
-          onTaskSelect(filteredTasks[focusIndex]);
+        if (tasks[focusIndex]) {
+          onTaskSelect(tasks[focusIndex]);
         }
         break;
       
@@ -125,25 +93,21 @@
 
 <div class="task-list-pane" bind:this={containerElement}>
   <div class="task-list-header">
-    <select bind:value={filter} class="filter-select">
-      <option value="all">All Tasks ({taskCounts.all})</option>
-      <option value="today">Today ({taskCounts.today})</option>
-      <option value="upcoming">Upcoming ({taskCounts.upcoming})</option>
-      <option value="recurring">Recurring ({taskCounts.recurring})</option>
-      <option value="overdue">Overdue ({taskCounts.overdue})</option>
-    </select>
+    <div class="task-count">
+      {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
+    </div>
     <button class="new-task-btn" on:click={onNewTask}>
       + New Task
     </button>
   </div>
   
   <div class="task-rows" bind:this={taskRowsContainer}>
-    {#if filteredTasks.length === 0}
+    {#if tasks.length === 0}
       <div class="no-tasks">
         <p>No tasks found</p>
       </div>
     {:else}
-      {#each filteredTasks as task, index (task.id)}
+      {#each tasks as task, index (task.id)}
         <div on:click={() => handleTaskClick(task)} role="button" tabindex="0">
           <TaskRow 
             {task} 
@@ -173,23 +137,15 @@
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    justify-content: space-between;
     z-index: 1;
   }
   
-  .filter-select {
+  .task-count {
     flex: 1;
-    padding: 0.5rem;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
-    background: var(--background-primary);
-    color: var(--text-normal);
     font-size: 0.9rem;
-    cursor: pointer;
-  }
-  
-  .filter-select:focus {
-    outline: 2px solid var(--interactive-accent);
-    outline-offset: -2px;
+    color: var(--text-muted);
+    font-weight: 500;
   }
   
   .new-task-btn {

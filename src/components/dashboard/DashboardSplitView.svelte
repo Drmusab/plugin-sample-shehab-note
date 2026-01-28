@@ -2,9 +2,13 @@
   import { onMount, onDestroy } from 'svelte';
   import TaskListPane from './TaskListPane.svelte';
   import TaskEditorPane from './TaskEditorPane.svelte';
+  import QuickSearch from './QuickSearch.svelte';
+  import SmartFilters from './SmartFilters.svelte';
   import type { Task } from '@/vendor/obsidian-tasks/types/Task';
   import type { Status } from '@/vendor/obsidian-tasks/types/Status';
   import { selectedTaskStore, selectTask, clearSelection } from '@/stores/selectedTask';
+  import { searchStore, applySmartFilters } from '@/stores/searchStore';
+  import { fuzzySearchTasks } from '@/utils/fuzzySearch';
   
   export let tasks: Task[] = [];
   export let statusOptions: Status[] = [];
@@ -15,6 +19,23 @@
   
   // Subscribe to selectedTaskStore
   $: currentTask = $selectedTaskStore;
+  
+  // Filter and search tasks
+  $: filteredTasks = (() => {
+    let results = [...tasks];
+    
+    // Apply search query
+    if ($searchStore.query) {
+      results = fuzzySearchTasks(results, $searchStore.query, $searchStore.fields);
+    }
+    
+    // Apply smart filters
+    if ($searchStore.activeFilters.size > 0) {
+      results = applySmartFilters(results, $searchStore.activeFilters);
+    }
+    
+    return results;
+  })();
   
   onMount(() => {
     // Pre-select initial task if provided
@@ -28,6 +49,8 @@
   
   onDestroy(() => {
     // Clean up is handled automatically by Svelte for $ subscriptions
+    // Clear search state when dashboard is closed
+    searchStore.clear();
   });
   
   function handleTaskSelect(task: Task) {
@@ -70,12 +93,19 @@
 </script>
 
 <div class="dashboard-split-view">
-  <TaskListPane 
-    {tasks}
-    selectedTaskId={currentTask?.id}
-    onTaskSelect={handleTaskSelect}
-    onNewTask={handleNewTask}
-  />
+  <div class="left-panel">
+    <div class="search-header">
+      <QuickSearch />
+      <SmartFilters {tasks} />
+    </div>
+    
+    <TaskListPane 
+      tasks={filteredTasks}
+      selectedTaskId={currentTask?.id}
+      onTaskSelect={handleTaskSelect}
+      onNewTask={handleNewTask}
+    />
+  </div>
   
   <TaskEditorPane 
     task={currentTask}
@@ -94,6 +124,18 @@
     height: 100%;
     width: 100%;
     overflow: hidden;
+  }
+  
+  .left-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    border-right: 1px solid var(--background-modifier-border);
+  }
+  
+  .search-header {
+    flex-shrink: 0;
   }
   
   /* Mobile layout: stacked */
