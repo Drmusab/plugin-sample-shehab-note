@@ -22,17 +22,21 @@
     "make-link": "node --no-warnings ./scripts/make_dev_link.js"
   },
   "dependencies": {
+    "@floating-ui/dom": "^1.7.5",
     "chrono-node": "^2.9.0",
-    "rrule": "^2.8.1",
+    "flatpickr": "^4.6.13",
     "minimatch": "^9.0.3",
     "moment": "^2.29.4",
-    "flatpickr": "^4.6.13"
+    "rrule": "^2.8.1"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/svelte": "^5.2.0",
     "@tsconfig/svelte": "^5.0.4",
+    "@types/flatpickr": "^3.1.2",
+    "@types/minimatch": "^5.1.2",
+    "@types/moment": "^2.13.0",
     "jsdom": "^24.1.0",
     "minimist": "^1.2.8",
     "sass": "^1.77.6",
@@ -42,9 +46,6 @@
     "vite": "^5.3.3",
     "vite-plugin-static-copy": "^1.0.6",
     "vite-plugin-zip-pack": "^1.2.4",
-    "vitest": "^1.6.0",
-    "@types/minimatch": "^5.1.2",
-    "@types/moment": "^2.13.0",
-    "@types/flatpickr": "^3.1.2"
+    "vitest": "^1.6.0"
   }
 }
