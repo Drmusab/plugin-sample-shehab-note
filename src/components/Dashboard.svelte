@@ -202,20 +202,6 @@
   onMount(() => {
     window.addEventListener("recurring-task-refresh", refreshHandler);
     
-    // Initialize dashboard view for task editing
-    if (dashboardViewContainer) {
-      dashboardView = new RecurringDashboardView(dashboardViewContainer, {
-        repository,
-        settingsService,
-        recurrenceEngine,
-        patternLearner,
-        onClose: () => {
-          showTaskForm = false;
-          editingTask = undefined;
-        },
-      });
-    }
-    
     // Listen for editor open events
     const unsubscribeEditorOpen = pluginEventBus.on('editor:open', (data) => {
       if (data.mode === 'create') {
@@ -417,20 +403,52 @@
     editingTask = task;
     showTaskForm = true;
     
-    if (dashboardView) {
-      dashboardView.loadTask(task);
-      dashboardView.mount();
-    }
+    // Initialize dashboard view lazily when container becomes available
+    requestAnimationFrame(() => {
+      if (dashboardViewContainer && !dashboardView) {
+        dashboardView = new RecurringDashboardView(dashboardViewContainer, {
+          repository,
+          settingsService,
+          recurrenceEngine,
+          patternLearner,
+          onClose: () => {
+            showTaskForm = false;
+            editingTask = undefined;
+          },
+        });
+      }
+      
+      if (dashboardView) {
+        dashboardView.loadTask(task);
+        dashboardView.mount();
+      }
+    });
   }
 
   function handleCreateTask() {
     editingTask = undefined;
     showTaskForm = true;
     
-    if (dashboardView) {
-      dashboardView.createNewTask();
-      dashboardView.mount();
-    }
+    // Initialize dashboard view lazily when container becomes available
+    requestAnimationFrame(() => {
+      if (dashboardViewContainer && !dashboardView) {
+        dashboardView = new RecurringDashboardView(dashboardViewContainer, {
+          repository,
+          settingsService,
+          recurrenceEngine,
+          patternLearner,
+          onClose: () => {
+            showTaskForm = false;
+            editingTask = undefined;
+          },
+        });
+      }
+      
+      if (dashboardView) {
+        dashboardView.createNewTask();
+        dashboardView.mount();
+      }
+    });
   }
 
   function handleCancelForm() {

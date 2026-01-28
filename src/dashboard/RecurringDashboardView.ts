@@ -12,7 +12,7 @@ import type { Task } from "@/core/models/Task";
 import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
 import type { SettingsService } from "@/core/settings/SettingsService";
 import type { PatternLearner } from "@/core/ml/PatternLearner";
-import type { RecurrenceEngine } from "@/core/engine/recurrence/RecurrenceEngine";
+import type { RecurrenceEngineRRULE } from "@/core/engine/recurrence/RecurrenceEngineRRULE";
 import { TaskDraftAdapter } from "@/adapters/TaskDraftAdapter";
 import { ObsidianTasksUIBridge } from "@/adapters/ObsidianTasksUIBridge";
 import { pluginEventBus } from "@/core/events/PluginEventBus";
@@ -21,7 +21,7 @@ import { toast } from "@/utils/notifications";
 export interface RecurringDashboardViewProps {
   repository: TaskRepositoryProvider;
   settingsService: SettingsService;
-  recurrenceEngine: RecurrenceEngine;
+  recurrenceEngine: RecurrenceEngineRRULE;
   patternLearner?: PatternLearner;
   onClose?: () => void;
 }
