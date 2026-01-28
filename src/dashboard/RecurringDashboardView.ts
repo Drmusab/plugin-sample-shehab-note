@@ -12,13 +12,16 @@ import type { Task } from "@/core/models/Task";
 import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
 import type { SettingsService } from "@/core/settings/SettingsService";
 import type { PatternLearner } from "@/core/ml/PatternLearner";
+import type { RecurrenceEngine } from "@/core/engine/recurrence/RecurrenceEngine";
 import { TaskDraftAdapter } from "@/adapters/TaskDraftAdapter";
 import { ObsidianTasksUIBridge } from "@/adapters/ObsidianTasksUIBridge";
 import { pluginEventBus } from "@/core/events/PluginEventBus";
+import { toast } from "@/utils/notifications";
 
 export interface RecurringDashboardViewProps {
   repository: TaskRepositoryProvider;
   settingsService: SettingsService;
+  recurrenceEngine: RecurrenceEngine;
   patternLearner?: PatternLearner;
   onClose?: () => void;
 }
@@ -41,46 +44,67 @@ export class RecurringDashboardView {
   }
 
   /**
-   * Mount the dashboard view
+   * Mount the dashboard view with full feature support
    */
-  mount(): void {
+  mount(initialTask?: Task): void {
     if (this.component) {
       return;
+    }
+
+    // Set current task if provided
+    if (initialTask) {
+      this.currentTask = initialTask;
     }
 
     // Clear container
     this.container.innerHTML = "";
     
-    // Add dashboard wrapper
+    // Create wrapper with proper styling
     const wrapper = document.createElement("div");
-    wrapper.className = "recurring-dashboard-wrapper obsidian-tasks-modal";
+    wrapper.className = "recurring-dashboard-wrapper tasks-modal";
     this.container.appendChild(wrapper);
 
     // Get all tasks for dependency resolution
-    const allTasks = this.props.repository.getAllTasks();
+    const allTasks = this.getAllTasks();
 
-    // Prepare EditableTask using TaskDraftAdapter
+    // Convert task using adapter
     const editableTask = this.currentTask
       ? TaskDraftAdapter.toEditableTask(this.currentTask, allTasks)
       : TaskDraftAdapter.createEmptyEditableTask();
 
-    // Convert all tasks to Obsidian format for the UI
-    const allObsidianTasks = allTasks.map(t => TaskDraftAdapter.toObsidianTaskStub(t));
+    // Get all tasks for dependency picker
+    const allEditableTasks = allTasks.map(task => 
+      TaskDraftAdapter.toEditableTask(task, allTasks)
+    );
 
-    // Mount the Obsidian-Tasks EditTask component
+    // Mount EditTask component
     this.component = mount(EditTask, {
       target: wrapper,
       props: {
         task: editableTask,
+        statusOptions: this.getStatusOptions(),
+        allTasks: allEditableTasks,
         onSubmit: this.handleSubmit.bind(this),
-        statusOptions: ObsidianTasksUIBridge.getStatusOptions(),
-        allTasks: allObsidianTasks,
       },
     });
   }
 
   /**
-   * Handle form submission from Obsidian-Tasks UI
+   * Get all tasks from repository
+   */
+  private getAllTasks(): Task[] {
+    return this.props.repository.getAllTasks();
+  }
+
+  /**
+   * Get status options for the status picker
+   */
+  private getStatusOptions() {
+    return ObsidianTasksUIBridge.getStatusOptions();
+  }
+
+  /**
+   * Handle form submission from Obsidian-Tasks UI with validation
    */
   private async handleSubmit(updatedTasks: any[]): Promise<void> {
     if (updatedTasks.length === 0) {
@@ -92,7 +116,7 @@ export class RecurringDashboardView {
     const editableTask = updatedTasks[0];
     
     try {
-      // Validate before conversion
+      // Validate using adapter
       TaskDraftAdapter.validate(editableTask);
       
       // Convert EditableTask to Recurring Task using adapter
@@ -101,18 +125,50 @@ export class RecurringDashboardView {
         this.currentTask
       );
 
+      // Validate recurrence logic with RecurrenceEngine
+      if (recurringTask.frequency) {
+        try {
+          const nextOccurrence = this.props.recurrenceEngine.calculateNext(
+            new Date(recurringTask.dueAt),
+            recurringTask.frequency
+          );
+          
+          if (!nextOccurrence) {
+            toast.error('Invalid recurrence rule: cannot calculate next occurrence');
+            return;
+          }
+        } catch (error) {
+          toast.error('Invalid recurrence rule: ' + (error instanceof Error ? error.message : String(error)));
+          return;
+        }
+      }
+
+      // Save to repository
       await this.props.repository.saveTask(recurringTask);
       
-      // Emit event for dashboard refresh
-      pluginEventBus.emit('task:updated', { taskId: recurringTask.id });
-
-      // Reset to new task form
-      this.currentTask = undefined;
-      this.refresh();
+      // Emit success event
+      pluginEventBus.emit('task:saved', { 
+        task: recurringTask,
+        isNew: !this.currentTask 
+      });
+      
+      toast.success(
+        this.currentTask 
+          ? `Task "${recurringTask.name}" updated` 
+          : `Task "${recurringTask.name}" created`
+      );
+      
+      // Close or refresh based on context
+      if (this.props.onClose) {
+        this.props.onClose();
+      } else {
+        // Reset to new task form
+        this.currentTask = undefined;
+        this.refresh();
+      }
     } catch (error) {
       console.error('Failed to save task:', error);
-      // TODO: Show error message to user
-      throw error;
+      toast.error(`Failed to save task: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -143,12 +199,21 @@ export class RecurringDashboardView {
     this.refresh();
   }
 
-  private handleClose(): void {
+  /**
+   * Clear current task and show new task form
+   */
+  createNewTask(): void {
     this.currentTask = undefined;
     this.refresh();
+  }
+
+  private handleClose(): void {
+    this.currentTask = undefined;
     
     if (this.props.onClose) {
       this.props.onClose();
+    } else {
+      this.refresh();
     }
   }
 }

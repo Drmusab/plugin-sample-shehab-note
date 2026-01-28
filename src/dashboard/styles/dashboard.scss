@@ -8,106 +8,40 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 16px;
+  padding: 24px;
   overflow-y: auto;
-  background-color: var(--b3-theme-background);
-  color: var(--b3-theme-on-background);
+  background-color: var(--b3-theme-surface);
+  color: var(--b3-theme-on-surface);
 }
 
-.recurring-dashboard-wrapper .task-editor-modal {
-  /* Remove modal-specific styles when used in dashboard */
+/* Override modal styles for dashboard context */
+.recurring-dashboard-wrapper.tasks-modal {
   box-shadow: none;
   border-radius: 0;
   max-width: none;
   width: 100%;
 }
 
-.recurring-dashboard-wrapper .modal-header {
-  /* Adjust header for dashboard context */
-  border-bottom: 1px solid var(--b3-border-color);
-  margin-bottom: 16px;
-}
-
-.recurring-dashboard-wrapper .form-section {
-  margin-bottom: 20px;
-}
-
-.recurring-dashboard-wrapper .form-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 24px;
-  padding-top: 16px;
+.recurring-dashboard-wrapper .tasks-modal-button-section {
+  position: sticky;
+  bottom: 0;
+  background-color: var(--b3-theme-surface);
+  padding: 16px 0;
   border-top: 1px solid var(--b3-border-color);
+  margin-top: 24px;
 }
 
-/**
- * Obsidian-Tasks Modal Styles in Dashboard Context
- */
-
-.recurring-dashboard-wrapper.obsidian-tasks-modal {
-  /* Remove modal-specific styles */
-  .tasks-modal {
-    box-shadow: none;
-    border-radius: 0;
-    max-width: none;
-    width: 100%;
-    padding: 0;
-  }
-
-  /* Preserve Obsidian-Tasks form layout */
-  .tasks-modal-description-section,
-  .tasks-modal-priority-section,
-  .tasks-modal-dates-section,
-  .tasks-modal-dependencies-section {
-    margin-bottom: 16px;
-  }
-
-  .tasks-modal-button-section {
-    margin-top: 24px;
-    padding-top: 16px;
-    border-top: 1px solid var(--b3-border-color);
-  }
-  
-  /* Improve form readability in dashboard */
-  label {
-    font-weight: 500;
-    margin-bottom: 4px;
-    display: block;
-  }
-  
-  input[type="text"],
-  input[type="date"],
-  textarea,
-  select {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid var(--b3-border-color);
-    border-radius: 4px;
-    background-color: var(--b3-theme-surface);
-    color: var(--b3-theme-on-surface);
-  }
-  
-  .tasks-modal-error {
-    border-color: var(--b3-theme-error, #f44336);
-  }
-  
-  .accesskey {
-    text-decoration: underline;
-  }
-}
-
-/* Responsive adjustments for narrow sidebars */
-@media (max-width: 600px) {
+/* Responsive adjustments for narrow viewports */
+@media (max-width: 768px) {
   .recurring-dashboard-wrapper {
-    padding: 12px;
+    padding: 16px;
   }
 
-  .recurring-dashboard-wrapper .form-actions {
-    flex-direction: column;
+  .tasks-modal-dates-section {
+    grid-template-columns: 1fr;
   }
 
-  .recurring-dashboard-wrapper .form-actions button {
-    width: 100%;
+  .tasks-modal-dependencies-section {
+    grid-template-columns: 1fr;
   }
 }

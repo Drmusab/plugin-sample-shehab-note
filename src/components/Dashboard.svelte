@@ -34,7 +34,7 @@
   import InsightsTab from "./tabs/InsightsTab.svelte";
   import EscalationTab from "./tabs/EscalationTab.svelte";
   import AttentionTab from "./tabs/AttentionTab.svelte";
-  import TaskEditorModal from "./TaskEditorModal.svelte";
+  import { RecurringDashboardView } from "@/dashboard/RecurringDashboardView";
   import Settings from "./settings/Settings.svelte";
   import Icon from "./ui/Icon.svelte";
   import type { PatternLearner } from "@/core/ml/PatternLearner";
@@ -68,6 +68,11 @@
   let showSettings = $state(false);
   let editingTask = $state<Task | undefined>(undefined);
   let quickFilters = $state<Set<string>>(new Set());
+  
+  // Dashboard view for task editing
+  let dashboardViewContainer: HTMLElement | null = $state(null);
+  let dashboardView: RecurringDashboardView | null = null;
+  
   /**
    * Dashboard task state (single UI source of truth).
    * Storage is only used for initial hydration or explicit reloads.
@@ -193,11 +198,48 @@
   loadTasksFromStorage();
 
   const refreshHandler = () => loadTasksFromStorage("reload");
+  
   onMount(() => {
     window.addEventListener("recurring-task-refresh", refreshHandler);
+    
+    // Initialize dashboard view for task editing
+    if (dashboardViewContainer) {
+      dashboardView = new RecurringDashboardView(dashboardViewContainer, {
+        repository,
+        settingsService,
+        recurrenceEngine,
+        patternLearner,
+        onClose: () => {
+          showTaskForm = false;
+          editingTask = undefined;
+        },
+      });
+    }
+    
+    // Listen for editor open events
+    const unsubscribeEditorOpen = pluginEventBus.on('editor:open', (data) => {
+      if (data.mode === 'create') {
+        handleCreateTask();
+      } else if (data.mode === 'edit' && data.taskId) {
+        const task = repository.getTask(data.taskId);
+        if (task) handleEditTask(task);
+      }
+    });
+    
+    // Listen for task saved events to refresh list
+    const unsubscribeTaskSaved = pluginEventBus.on('task:saved', () => {
+      loadTasksFromStorage('external');
+    });
+    
+    return () => {
+      unsubscribeEditorOpen();
+      unsubscribeTaskSaved();
+    };
   });
+  
   onDestroy(() => {
     window.removeEventListener("recurring-task-refresh", refreshHandler);
+    dashboardView?.unmount();
   });
 
   async function handleTaskDone(task: Task) {
@@ -374,16 +416,27 @@
   function handleEditTask(task: Task) {
     editingTask = task;
     showTaskForm = true;
+    
+    if (dashboardView) {
+      dashboardView.loadTask(task);
+      dashboardView.mount();
+    }
   }
 
   function handleCreateTask() {
     editingTask = undefined;
     showTaskForm = true;
+    
+    if (dashboardView) {
+      dashboardView.createNewTask();
+      dashboardView.mount();
+    }
   }
 
   function handleCancelForm() {
     showTaskForm = false;
     editingTask = undefined;
+    dashboardView?.unmount();
   }
 
   function handleOpenSettings() {
@@ -475,14 +528,10 @@
     </div>
   {:else if showTaskForm}
     <div class="dashboard__overlay">
-      <TaskEditorModal
-        task={editingTask}
-        {repository}
-        {settingsService}
-        {patternLearner}
-        onSave={handleSaveTask}
-        onClose={handleCancelForm}
-      />
+      <div 
+        class="dashboard__editor-wrapper"
+        bind:this={dashboardViewContainer}
+      ></div>
     </div>
   {:else}
     <div class="dashboard__tabs" role="tablist" aria-label="Dashboard tabs">
@@ -996,5 +1045,26 @@
     padding: 20px;
     overflow-y: auto;
     z-index: 1000;
+  }
+
+  .dashboard__editor-wrapper {
+    width: 100%;
+    max-width: 800px;
+    max-height: 90vh;
+    background: var(--b3-theme-surface);
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Mobile responsiveness for editor */
+  @media (max-width: 768px) {
+    .dashboard__editor-wrapper {
+      max-width: 100%;
+      max-height: 100vh;
+      border-radius: 0;
+    }
   }
 </style>

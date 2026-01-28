@@ -11,6 +11,8 @@ type PluginEventMap = {
   'task:settings': { action?: string };
   'task:refresh': void;
   'task:updated': { taskId: string };
+  'task:saved': { task: any; isNew: boolean };
+  'editor:open': { mode: 'create' | 'edit'; taskId?: string; prefill?: any };
 };
 
 type EventHandler<T> = (data: T) => void;
