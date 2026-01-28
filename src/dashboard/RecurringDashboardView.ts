@@ -8,12 +8,14 @@
 
 import { mount, unmount } from "svelte";
 import EditTask from "@/vendor/obsidian-tasks/ui/EditTask.svelte";
+import { EditableTask } from "@/vendor/obsidian-tasks/ui/EditableTask";
 import type { Task } from "@/core/models/Task";
 import type { TaskRepositoryProvider } from "@/core/storage/TaskRepository";
 import type { SettingsService } from "@/core/settings/SettingsService";
 import type { PatternLearner } from "@/core/ml/PatternLearner";
 import type { RecurrenceEngineRRULE } from "@/core/engine/recurrence/RecurrenceEngineRRULE";
-import { ObsidianTasksUIBridge } from "@/adapters/ObsidianTasksUIBridge";
+import { TaskDraftAdapter } from "@/adapters/TaskDraftAdapter";
+import { StatusRegistry } from "@/vendor/obsidian-tasks/types/Status";
 import { pluginEventBus } from "@/core/events/PluginEventBus";
 import { toast } from "@/utils/notifications";
 
@@ -66,14 +68,14 @@ export class RecurringDashboardView {
     // Get all tasks for dependency resolution
     const allTasks = this.getAllTasks();
 
-    // Convert task using bridge - EditTask expects Task, not EditableTask
+    // Convert task using TaskDraftAdapter - EditTask expects Task, not EditableTask
     const obsidianTask = this.currentTask
-      ? ObsidianTasksUIBridge.toObsidianTask(this.currentTask)
-      : ObsidianTasksUIBridge.toObsidianTask(this.createEmptyTask());
+      ? TaskDraftAdapter.toObsidianTaskStub(this.currentTask)
+      : TaskDraftAdapter.toObsidianTaskStub(this.createEmptyTask());
 
     // Convert all tasks to Obsidian format for the UI
     const allObsidianTasks = allTasks.map(task => 
-      ObsidianTasksUIBridge.toObsidianTask(task)
+      TaskDraftAdapter.toObsidianTaskStub(task)
     );
 
     // Mount EditTask component
@@ -133,7 +135,7 @@ export class RecurringDashboardView {
    * Get status options for the status picker
    */
   private getStatusOptions() {
-    return ObsidianTasksUIBridge.getStatusOptions();
+    return StatusRegistry.getInstance().registeredStatuses;
   }
 
   /**
@@ -149,9 +151,15 @@ export class RecurringDashboardView {
     const obsidianTask = updatedTasks[0];
     
     try {
-      // Convert ObsidianTask to Recurring Task using bridge
-      const recurringTask = ObsidianTasksUIBridge.fromObsidianTask(
-        obsidianTask,
+      // Convert ObsidianTask to EditableTask, then to Recurring Task
+      // We need to reconstruct EditableTask from the obsidian task
+      const allTasks = this.getAllTasks();
+      const allObsidianTasks = allTasks.map(t => TaskDraftAdapter.toObsidianTaskStub(t));
+      const editableTask = EditableTask.fromTask(obsidianTask, allObsidianTasks);
+      
+      // Convert EditableTask to Recurring Task using adapter
+      const recurringTask = TaskDraftAdapter.fromEditableTask(
+        editableTask,
         this.currentTask
       );
 
